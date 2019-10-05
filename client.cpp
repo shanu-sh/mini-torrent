@@ -12,8 +12,13 @@
 
 using namespace std;
 
+struct host_data
+{
+    string ip;
+    int port;
+};
 
-void send2tracker(string ip,int port,string filename)
+void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string filename)
 {
     int sockid,n;
     int control=1;
@@ -29,10 +34,11 @@ void send2tracker(string ip,int port,string filename)
 
     struct sockaddr_in serveraddr;
     serveraddr.sin_family=AF_INET;
-    serveraddr.sin_port=htons(port);
-    serveraddr.sin_addr.s_addr=inet_addr(ip.c_str());
+    serveraddr.sin_port=htons(tracker_port);
+    serveraddr.sin_addr.s_addr=inet_addr(tracker_ip.c_str());
 
-    filename=filename+" 127.0.0.1 2800";
+    filename=filename+" "+ip+" "+to_string(port)+" ";
+
     char data[BUFFSIZE];
 
     strcpy(data,filename.c_str());
@@ -110,15 +116,18 @@ void recvfromtracker(string ip,int port)
     long filesize;
     recv(sockid, &filesize, sizeof(filesize), 0);
 
+   
     FILE *fp=fopen("temp.jpg","wb");
     
-    while((n=recv(sockid,buffer,BUFFSIZE,0))>0 && filesize>0)
+    while(filesize>0 && (n=recv(sockid,buffer,BUFFSIZE,0))>0 )
     {
         fwrite(buffer,sizeof(char),n,fp);
+        // cout<<n<<"\n";
         memset(buffer,'\0',BUFFSIZE);
         filesize=filesize-n;
+        // cout<<filesize<<"\n";
     }
-
+    // cout<<"outer "<<filesize<<"\n";
     close(sockid);
     fclose(fp);
 }
@@ -130,12 +139,13 @@ void *funcd(void * arg)
     int cid;
     int n;
 
+    struct host_data *data=(struct host_data*)arg;
     char buffer[BUFFSIZE];
     struct sockaddr_in addr;
 
     addr.sin_family=AF_INET;
-    addr.sin_port=htons(2800);
-    addr.sin_addr.s_addr=inet_addr("127.0.0.1");
+    addr.sin_port=htons(data->port);
+    addr.sin_addr.s_addr=inet_addr(data->ip.c_str());
 
     len=sizeof(addr);
 
@@ -185,12 +195,20 @@ int main(int argc,char **argv)
     string ip=argv[1];
     int port=stoi(argv[2]);
     string cmd;
-    int cid=0;
+
+    struct host_data data;
+
+    data.ip=ip;
+    data.port=port;
+
     pthread_t id;
-    pthread_create(&id,NULL,funcd,(void*)&cid);
+    pthread_create(&id,NULL,funcd,(void*)&data);
     pthread_detach(id);
 
     string filename;
+
+    string tracker_ip="127.0.0.1";
+    int tracker_port=2000;
 
     while(1)
     {
@@ -198,13 +216,13 @@ int main(int argc,char **argv)
 
         if(cmd.compare("download")==0)
         {
-            recvfromtracker(ip,port);
+            recvfromtracker(tracker_ip,tracker_port);
         }
 
         if(cmd.compare("upload")==0)
         {
             cin>>filename;
-            send2tracker(ip,port,filename);
+            send2tracker(tracker_ip,tracker_port,ip,port,filename);
         }
     }   
 }
