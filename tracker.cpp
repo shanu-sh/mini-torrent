@@ -18,6 +18,7 @@ struct trackerdata
     string ip;
     string port;
     string group_id;
+    string hash;
     string filename;
 };
 
@@ -37,7 +38,6 @@ void *func(void * arg)
     {
         int nsockid;
 
-        int portadd=4000;
         char buffer[BUFFSIZE];
 
         recv(cval,( void*)buffer,sizeof(buffer),0);
@@ -72,6 +72,19 @@ void *func(void * arg)
         ss>>temp.filename;
         ss>>temp.ip;
         ss>>temp.port;
+
+        memset(buffer,'\0',BUFFSIZE);
+        string hash="";
+        int n;
+        while((n=recv(cval,buffer,BUFFSIZE,0))>0 )
+        {
+            hash=hash+buffer;
+            // cout<<n<<"\n";
+            memset(buffer,'\0',BUFFSIZE);
+        }
+
+        cout<<"Recieved hash is "<<hash<<"\n";
+        temp.hash=hash;
         arr.push_back(temp);
 
         cout<<arr[0].ip<<"\n";

@@ -7,6 +7,7 @@
 #include<pthread.h>
 #include<iostream>
 #include<sstream>
+#include<openssl/sha.h>
 
 #define BUFFSIZE 512
 
@@ -18,11 +19,36 @@ struct host_data
     int port;
 };
 
+string computehash(string str)
+{
+    unsigned char temp[SHA_DIGEST_LENGTH];
+    char buf[SHA_DIGEST_LENGTH*2];
+ 
+    string hash="";
+
+    memset(buf,'\0', SHA_DIGEST_LENGTH*2);
+    memset(temp,'\0', SHA_DIGEST_LENGTH);
+ 
+    SHA1((unsigned char *)str.c_str(), strlen(str.c_str())-1, temp);
+ 
+    for (int i=0; i < SHA_DIGEST_LENGTH; i++) {
+        sprintf((char*)&(buf[i]), "%x", temp[i]);
+        hash=hash+buf[i];
+    }
+ 
+    // printf("SHA1 is %s\n", buf);
+    // cout<<hash<<"\n";
+
+    return hash;
+}
+
 void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string filename)
 {
     int sockid,n;
     int control=1;
     char buffer[BUFFSIZE];
+
+    string file=filename;
 
     sockid=socket(AF_INET,SOCK_STREAM,0);
 
@@ -44,8 +70,49 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     strcpy(data,filename.c_str());
     connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
 
+    //Sending the control info and file name to tracker
+
     send(sockid,(const void*)&control,sizeof(control),0);
     send(sockid,(const void*)data,sizeof(data),0);
+
+
+    //Now we need to create hash and send to the tracker
+
+    FILE *fp;
+    fp=fopen(file.c_str(),"rb");
+    fseek(fp,0,SEEK_END);
+
+    long size=ftell(fp);
+    rewind(fp);
+
+    string hash;
+    int chunkcount=0;
+    //Reading file and calculating hash and sending to tracker
+
+    while((n=fread(buffer,sizeof(char),BUFFSIZE,fp))>0 && size>0)
+    {
+        //send(cid,buffer,n,0);
+
+        //Compute hash value
+        //cout<<"Value read is "<<buffer;
+        hash=computehash(buffer);
+
+        cout<<"\nHash computed is ";
+        cout<<hash<<"\n";
+        memset(buffer,'\0',BUFFSIZE);
+
+        strcpy(buffer,hash.c_str());
+        send(sockid,buffer,SHA_DIGEST_LENGTH*2,0);
+
+        memset(buffer,'\0',BUFFSIZE);
+
+        chunkcount++;
+        size=size-n;
+    }
+
+    cout<<"No of chunks created "<<chunkcount<<"\n";
+    fclose(fp);
+
 
     close(sockid);
 }
