@@ -10,6 +10,8 @@
 #include<sstream>
 #include<signal.h>
 #include<limits>
+#include<unordered_map>
+#include<stdio.h>
 
 #define BUFFSIZE 512
 
@@ -25,12 +27,13 @@ struct trackerdata
 };
 
 vector<struct trackerdata> arr;
+unordered_map<string,string> mapdata;
 
 FILE *tr;
 
 void mysignal_handler(int s)
 {
-    cout<<"Signal caught";
+    //cout<<"Signal caught";
     fclose(tr);
     exit(1);
 }
@@ -94,9 +97,6 @@ void *func(void * arg)
         recv(cval,(void*)buffer,sizeof(buffer),0);
         cout<<buffer<<"\n";
 
-        fwrite(buffer,sizeof(char),strlen(buffer),tr);
-        fflush(tr);
-
         stringstream ss(buffer);
 
         struct trackerdata temp;
@@ -119,8 +119,71 @@ void *func(void * arg)
         temp.hash=hash;
         arr.push_back(temp);
 
+        char data[10000];
+        string filedata=temp.filename+" "+temp.ip+" "+temp.port+" "+temp.group_id+" "+temp.hash+"\n";
+        strcpy(data,filedata.c_str());
+
+        fwrite(data,sizeof(char),strlen(data),tr);
+        fflush(tr);
+
         cout<<arr[arr.size()-1].filename<<" "<<arr[arr.size()-1].group_id<<"\n";
         cout<<"Upload done\n";
+    }
+
+    else if(command==2)
+    {
+        //Creates a user
+        char buffer[BUFFSIZE];
+        recv(cval,( void*)buffer,sizeof(buffer),0);
+        stringstream ss(buffer);
+
+        string user_id;
+        string password;
+
+        ss>>user_id;
+        ss>>password;
+
+        if(mapdata.find(user_id)==mapdata.end())
+        {
+            mapdata[user_id]=password;
+            strcpy(buffer,"user_created");
+            send(cval,(void*)buffer,sizeof(buffer),0);
+        }
+        else
+        {
+            strcpy(buffer,"user_already_created");
+            send(cval,(void*)buffer,sizeof(buffer),0);
+        }
+        
+    }
+
+    else if(command==3)
+    {
+        //Authenticates user
+        char buffer[BUFFSIZE];
+        recv(cval,( void*)buffer,sizeof(buffer),0);
+        stringstream ss(buffer);
+
+        string user_id;
+        string password;
+
+        ss>>user_id;
+        ss>>password;
+
+        if(mapdata.find(user_id)==mapdata.end())
+        {
+            strcpy(buffer,"User_not_present");
+            send(cval,(void*)buffer,sizeof(buffer),0);
+        }
+        else
+        {
+            if(mapdata[user_id].compare(password)==0)
+                strcpy(buffer,"logged_in");
+            else
+                strcpy(buffer,"User_not_present");
+            
+            send(cval,(void*)buffer,sizeof(buffer),0);
+        }
     }
     close(cval);
 }
@@ -158,14 +221,42 @@ int main()
 {
     
     int len;
+    tr=fopen("tracker_data.txt","r");
+
+    if(tr==NULL)
+    {
+        cout<<"FIle not present\n";
+    }
+    char buffer1[200];
+    char buffer2[200];
+    char buffer3[200];
+    char buffer4[200];
+    char buffer5[200];
+    cout<<"reading from file\n";
+   
+    string line;
+    //getline(tr,line);
+
+    while(fscanf(tr,"%s %s %s %s %s",buffer1,buffer2,buffer3,buffer4,buffer5)!=EOF)
+    {
+    cout<<"In while\n";
+    cout<<buffer1<<"\n";
+    cout<<buffer2<<"\n";
+
+    line=string(buffer1)+string(buffer2);
+    cout<<line<<"\n";
+
+    struct trackerdata temp;
+    temp.filename=string(buffer1);
+    temp.ip=string(buffer2);
+    temp.port=string(buffer3);
+    temp.group_id=string(buffer4);
+    temp.hash=string(buffer5);
+    arr.push_back(temp);
+    }
+    fclose(tr);
     tr=fopen("tracker_data.txt","a");
 
-    char buffer1[100];
-    signal(SIGINT,mysignal_handler);
-    strcpy(buffer1,"Hello worl\n");
-    fwrite(buffer1,sizeof(char),strlen(buffer1),tr);
-    fflush(tr);
-    
     pthread_t id;
     pthread_create(&id,NULL,acceptclient,(void*)&len);
     pthread_detach(id);

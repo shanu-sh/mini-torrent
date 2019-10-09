@@ -19,6 +19,8 @@ struct host_data
     int port;
 };
 
+bool login_status=true;
+
 string computehash(string str)
 {
     unsigned char temp[SHA_DIGEST_LENGTH];
@@ -116,7 +118,6 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
 
     cout<<"No of chunks created "<<chunkcount<<"\n";
     fclose(fp);
-
 
     close(sockid);
 }
@@ -270,6 +271,91 @@ void *funcd(void * arg)
     }
 }
 
+void create_user(string tracker_ip,int tracker_port,string user_id,string password)
+{
+    int sockid,n;
+    int control=2;
+    char buffer[BUFFSIZE];
+    string data;
+
+    sockid=socket(AF_INET,SOCK_STREAM,0);
+
+    if(sockid<0)
+    {
+        perror("Error in socket creation\n");
+        exit(1);
+    }
+
+    struct sockaddr_in serveraddr;
+    serveraddr.sin_family=AF_INET;
+    serveraddr.sin_port=htons(tracker_port);
+    serveraddr.sin_addr.s_addr=inet_addr(tracker_ip.c_str());
+
+    connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
+
+    send(sockid,(const void*)&control,sizeof(control),0);
+
+    data=user_id+" "+password;
+    strcpy(buffer,data.c_str());
+
+    send(sockid,(const void*)buffer,sizeof(buffer),0);
+
+    recv(sockid,(void *)buffer,sizeof(buffer),0);
+
+    stringstream ss(buffer);
+
+    data="";
+    ss>>data;
+
+    if(data.compare("user_created")==0)
+        cout<<"User created successfully\n";
+    else
+        cout<<"User creation unsuccessful\n";
+
+}
+
+bool authenticate(string tracker_ip,int tracker_port,string user_id,string password)
+{
+    int sockid,n;
+    int control=3;
+    char buffer[BUFFSIZE];
+    string data;
+
+    sockid=socket(AF_INET,SOCK_STREAM,0);
+
+    if(sockid<0)
+    {
+        perror("Error in socket creation\n");
+        exit(1);
+    }
+
+    struct sockaddr_in serveraddr;
+    serveraddr.sin_family=AF_INET;
+    serveraddr.sin_port=htons(tracker_port);
+    serveraddr.sin_addr.s_addr=inet_addr(tracker_ip.c_str());
+
+    connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
+
+    send(sockid,(const void*)&control,sizeof(control),0);
+
+    data=user_id+" "+password;
+    strcpy(buffer,data.c_str());
+    send(sockid,(const void*)buffer,sizeof(buffer),0);
+
+    recv(sockid,(void *)buffer,sizeof(buffer),0);
+
+    stringstream ss(buffer);
+
+    data="";
+    ss>>data;
+
+    if(data.compare("logged_in")==0)
+        return true;
+    else
+        return false;
+
+}
+
 int main(int argc,char **argv)
 {
     if(argc<3)
@@ -281,6 +367,8 @@ int main(int argc,char **argv)
     string ip=argv[1];
     int port=stoi(argv[2]);
     string cmd;
+
+    string user_id,password;
 
     struct host_data data;
 
@@ -302,14 +390,69 @@ int main(int argc,char **argv)
 
         if(cmd.compare("download")==0)
         {
-            recvfromtracker(tracker_ip,tracker_port);
+            if(login_status)
+                recvfromtracker(tracker_ip,tracker_port);
+            else
+            {
+                cout<<"Please log in \n";
+            }
+            
         }
 
         if(cmd.compare("upload")==0)
         {
-            cin>>filename;
-            cin>>groupid;
-            send2tracker(tracker_ip,tracker_port,ip,port,filename,groupid);
+            if(login_status)
+            {
+                cin>>filename;
+                cin>>groupid;
+                send2tracker(tracker_ip,tracker_port,ip,port,filename,groupid);
+            }
+            else
+            {
+                cout<<"Please log in \n";
+            }
+            
         }
+
+        if(cmd.compare("create_user")==0)
+        {          
+            cout<<"Enter user name\n";
+            cin>>user_id;
+
+            cout<<"Enter pasword\n";
+            cin>>password;
+
+            create_user(tracker_ip,tracker_port,user_id,password);
+        }
+
+        if(cmd.compare("login")==0)
+        {
+            cout<<"Enter user name\n";
+            cin>>user_id;
+
+            cout<<"Enter pasword\n";
+            cin>>password;
+
+            if(authenticate(tracker_ip,tracker_port,user_id,password))
+            {
+                login_status=true;
+                cout<<"Logged in\n";
+            }
+            else
+                cout<<"Please check your user_id and password\n";
+        }
+
+        if(cmd.compare("logout")==0)
+        {
+            if(login_status==false)
+                cout<<"Please login first\n";
+            else
+            {
+                login_status=false;
+                cout<<"Logged out\n";
+            }
+            
+        }
+
     }   
 }
