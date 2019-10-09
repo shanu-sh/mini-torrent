@@ -8,6 +8,8 @@
 #include<iostream>
 #include<vector>
 #include<sstream>
+#include<signal.h>
+#include<limits>
 
 #define BUFFSIZE 512
 
@@ -23,6 +25,15 @@ struct trackerdata
 };
 
 vector<struct trackerdata> arr;
+
+FILE *tr;
+
+void mysignal_handler(int s)
+{
+    cout<<"Signal caught";
+    fclose(tr);
+    exit(1);
+}
 
 void *func(void * arg)
 {
@@ -83,6 +94,9 @@ void *func(void * arg)
         recv(cval,(void*)buffer,sizeof(buffer),0);
         cout<<buffer<<"\n";
 
+        fwrite(buffer,sizeof(char),strlen(buffer),tr);
+        fflush(tr);
+
         stringstream ss(buffer);
 
         struct trackerdata temp;
@@ -111,15 +125,13 @@ void *func(void * arg)
     close(cval);
 }
 
-int main()
+
+void *acceptclient(void *arg)
 {
     int sockid=socket(AF_INET,SOCK_STREAM,0);
-    int len,file_size,n;
-    FILE *fp;
-    int cid;
     char buffer[BUFFSIZE];
     struct sockaddr_in addr;
-
+    int len,cid;
     addr.sin_family=AF_INET;
     addr.sin_port=htons(2000);
     addr.sin_addr.s_addr=inet_addr("127.0.0.1");
@@ -138,9 +150,38 @@ int main()
     while(1)
     {
         cid=accept(sockid,(struct sockaddr*)&addr,(socklen_t*)&len);
-
         pthread_create(&ids[count],NULL,func,(void*)&cid);
         pthread_detach(ids[count++]); 
     }
-    fclose(fp);
+}
+int main()
+{
+    
+    int len;
+    tr=fopen("tracker_data.txt","a");
+
+    char buffer1[100];
+    signal(SIGINT,mysignal_handler);
+    strcpy(buffer1,"Hello worl\n");
+    fwrite(buffer1,sizeof(char),strlen(buffer1),tr);
+    fflush(tr);
+    
+    pthread_t id;
+    pthread_create(&id,NULL,acceptclient,(void*)&len);
+    pthread_detach(id);
+
+    string command;
+    while(1)
+    {
+        cout<<flush;
+        
+        cout<<"Enter command\n";
+        cin>>command;
+        if(command.compare("quit")==0)
+        {
+            fclose(tr);
+            exit(1);
+        }
+
+    }
 }
