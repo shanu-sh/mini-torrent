@@ -9,11 +9,9 @@
 #include<vector>
 #include<sstream>
 #include<signal.h>
-#include<limits>
 #include<unordered_map>
-#include<stdio.h>
 
-#define BUFFSIZE 524288
+#define BUFFSIZE 512
 
 using namespace std;
 
@@ -259,7 +257,24 @@ int main()
     
     if(utr!=NULL)
     {
+        char buffer1[200000];
+        
+        while(fscanf(utr,"%[^\n]\n",buffer1)!=EOF)
+        {
+            cout<<buffer1<<"\n";
+            stringstream ss(buffer1);
 
+            string user_id;
+            string password;
+
+            struct trackerdata temp;
+            ss>>user_id;
+            ss>>password;
+            
+            mapdata[user_id]=password;
+        
+        }
+         fclose(utr);
     }
     
     tr=fopen("tracker_data.txt","a");

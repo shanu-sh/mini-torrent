@@ -9,7 +9,7 @@
 #include<sstream>
 #include<openssl/sha.h>
 
-#define BUFFSIZE 524288
+#define BUFFSIZE 512
 
 using namespace std;
 
