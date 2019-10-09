@@ -9,7 +9,7 @@
 #include<sstream>
 #include<openssl/sha.h>
 
-#define BUFFSIZE 512
+#define BUFFSIZE 524288
 
 using namespace std;
 
@@ -19,7 +19,7 @@ struct host_data
     int port;
 };
 
-bool login_status=true;
+bool login_status=false;
 
 string computehash(string str)
 {
@@ -100,11 +100,11 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
         //send(cid,buffer,n,0);
 
         //Compute hash value
-        //cout<<"Value read is "<<buffer;
+        
         hash=computehash(buffer);
 
-        // cout<<"\nHash computed is ";
-        // cout<<hash<<"\n";
+        cout<<"\nHash computed is ";
+        cout<<hash<<"\n";
         memset(buffer,'\0',BUFFSIZE);
 
         strcpy(buffer,hash.c_str());

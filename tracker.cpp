@@ -13,7 +13,7 @@
 #include<unordered_map>
 #include<stdio.h>
 
-#define BUFFSIZE 512
+#define BUFFSIZE 524288
 
 using namespace std;
 
@@ -24,17 +24,20 @@ struct trackerdata
     string group_id;
     string hash;
     string filename;
+    vector<int> chunk;
 };
 
 vector<struct trackerdata> arr;
 unordered_map<string,string> mapdata;
 
 FILE *tr;
+FILE *utr;
 
 void mysignal_handler(int s)
 {
     //cout<<"Signal caught";
     fclose(tr);
+    fclose(utr);
     exit(1);
 }
 
@@ -119,7 +122,7 @@ void *func(void * arg)
         temp.hash=hash;
         arr.push_back(temp);
 
-        char data[10000];
+        char data[BUFFSIZE];
         string filedata=temp.filename+" "+temp.ip+" "+temp.port+" "+temp.group_id+" "+temp.hash+"\n";
         strcpy(data,filedata.c_str());
 
@@ -146,6 +149,12 @@ void *func(void * arg)
         if(mapdata.find(user_id)==mapdata.end())
         {
             mapdata[user_id]=password;
+
+            string filedata=user_id+" "+password+"\n";
+            strcpy(buffer,filedata.c_str());
+            fwrite(buffer,sizeof(char),strlen(buffer),utr);
+            fflush(utr);
+
             strcpy(buffer,"user_created");
             send(cval,(void*)buffer,sizeof(buffer),0);
         }
@@ -217,45 +226,44 @@ void *acceptclient(void *arg)
         pthread_detach(ids[count++]); 
     }
 }
+
 int main()
-{
-    
+{    
     int len;
     tr=fopen("tracker_data.txt","r");
+    utr=fopen("tracker_user_data.txt","r");
 
-    if(tr==NULL)
+    signal(SIGINT,mysignal_handler);
+
+    if(tr!=NULL)
     {
-        cout<<"FIle not present\n";
-    }
-    char buffer1[200];
-    char buffer2[200];
-    char buffer3[200];
-    char buffer4[200];
-    char buffer5[200];
-    cout<<"reading from file\n";
-   
-    string line;
-    //getline(tr,line);
+        char buffer1[200000];
+        cout<<"reading from file\n";
+    
+        while(fscanf(tr,"%[^\n]\n",buffer1)!=EOF)
+        {
+            cout<<buffer1<<"\n";
+            stringstream ss(buffer1);
 
-    while(fscanf(tr,"%s %s %s %s %s",buffer1,buffer2,buffer3,buffer4,buffer5)!=EOF)
+            struct trackerdata temp;
+            ss>>temp.filename;
+            ss>>temp.ip;
+            ss>>temp.port;
+            ss>>temp.group_id;
+            ss>>temp.hash;
+            arr.push_back(temp);
+        
+        }
+        fclose(tr);
+    }
+    
+    if(utr!=NULL)
     {
-    cout<<"In while\n";
-    cout<<buffer1<<"\n";
-    cout<<buffer2<<"\n";
 
-    line=string(buffer1)+string(buffer2);
-    cout<<line<<"\n";
-
-    struct trackerdata temp;
-    temp.filename=string(buffer1);
-    temp.ip=string(buffer2);
-    temp.port=string(buffer3);
-    temp.group_id=string(buffer4);
-    temp.hash=string(buffer5);
-    arr.push_back(temp);
     }
-    fclose(tr);
+    
     tr=fopen("tracker_data.txt","a");
+    utr=fopen("tracker_user_data.txt","a");
 
     pthread_t id;
     pthread_create(&id,NULL,acceptclient,(void*)&len);
