@@ -41,12 +41,20 @@ void *func(void * arg)
         char buffer[BUFFSIZE];
         bool flag=false;
 
+        string filename;
+        string group_id;
+
         recv(cval,( void*)buffer,sizeof(buffer),0);
+
+        stringstream ss(buffer);
+
+        ss>>filename;
+        ss>>group_id;
         cout<<"sending port\n";
 
         for(auto x:arr)
         {
-            if(x.filename.compare(string(buffer))==0)
+            if(x.filename.compare(filename)==0 && x.group_id.compare(group_id)==0)
             {
                 string temp=x.ip+" "+x.port;
                 memset(buffer,'\0',BUFFSIZE);

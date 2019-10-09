@@ -125,6 +125,7 @@ void recvfromtracker(string ip,int port)
 {
     int control=0;
     string filename;
+    int group_id;
     int sockid,n,cid,len;
     char buffer[BUFFSIZE];
 
@@ -137,9 +138,12 @@ void recvfromtracker(string ip,int port)
     }
 
     cin>>filename;
+    cin>>group_id;
 
     char data[BUFFSIZE];
-    strcpy(data,filename.c_str());
+
+    string tempdata=filename+" "+to_string(group_id)+" ";
+    strcpy(data,tempdata.c_str());
 
     struct sockaddr_in serveraddr;
     serveraddr.sin_family=AF_INET;
