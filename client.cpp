@@ -35,14 +35,11 @@ string computehash(string str)
         sprintf((char*)&(buf[i]), "%x", temp[i]);
         hash=hash+buf[i];
     }
- 
-    // printf("SHA1 is %s\n", buf);
-    // cout<<hash<<"\n";
 
     return hash;
 }
 
-void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string filename)
+void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string filename,int groupid)
 {
     int sockid,n;
     int control=1;
@@ -63,7 +60,7 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     serveraddr.sin_port=htons(tracker_port);
     serveraddr.sin_addr.s_addr=inet_addr(tracker_ip.c_str());
 
-    filename=filename+" "+ip+" "+to_string(port)+" ";
+    filename=filename+" "+ip+" "+to_string(port)+" "+to_string(groupid)+" ";
 
     char data[BUFFSIZE];
 
@@ -80,6 +77,13 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
 
     FILE *fp;
     fp=fopen(file.c_str(),"rb");
+    if(fp==NULL)
+    {
+        cout<<file;
+        cout<<"FIle not Present\n";
+        return;
+    }
+    
     fseek(fp,0,SEEK_END);
 
     long size=ftell(fp);
@@ -97,8 +101,8 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
         //cout<<"Value read is "<<buffer;
         hash=computehash(buffer);
 
-        cout<<"\nHash computed is ";
-        cout<<hash<<"\n";
+        // cout<<"\nHash computed is ";
+        // cout<<hash<<"\n";
         memset(buffer,'\0',BUFFSIZE);
 
         strcpy(buffer,hash.c_str());
@@ -158,6 +162,12 @@ void recvfromtracker(string ip,int port)
     int dport;
     string dip,dp;
     ss>>dip;
+
+    if(dip.compare("not_present")==0)
+    {
+        cout<<"File not uploaded in tracker\n";
+        return;
+    }
     ss>>dp;
     dport=stoi(dp);
     cout<<dport<<"\n";
@@ -181,10 +191,17 @@ void recvfromtracker(string ip,int port)
     connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
 
     long filesize;
+
+    //sending filename to the other client
+
+    strcpy(buffer,filename.c_str());
+    send(sockid, buffer, sizeof(buffer), 0);
+
+
     recv(sockid, &filesize, sizeof(filesize), 0);
 
    
-    FILE *fp=fopen("temp.jpg","wb");
+    FILE *fp=fopen(filename.c_str(),"wb");
     
     while(filesize>0 && (n=recv(sockid,buffer,BUFFSIZE,0))>0 )
     {
@@ -226,13 +243,11 @@ void *funcd(void * arg)
 
         //First recevive file name
 
-        //recv(cid,buffer,sizeof(buffer),0);
-
-
-        //cout<<buffer<<"\n";
+        recv(cid,buffer,sizeof(buffer),0);
+        cout<<buffer<<"\n";
 
         FILE *fp;
-        fp=fopen("pic.jpg","rb");
+        fp=fopen(buffer,"rb");
         fseek(fp,0,SEEK_END);
 
         long size=ftell(fp);
@@ -273,7 +288,7 @@ int main(int argc,char **argv)
     pthread_detach(id);
 
     string filename;
-
+    int groupid;
     string tracker_ip="127.0.0.1";
     int tracker_port=2000;
 
@@ -289,7 +304,8 @@ int main(int argc,char **argv)
         if(cmd.compare("upload")==0)
         {
             cin>>filename;
-            send2tracker(tracker_ip,tracker_port,ip,port,filename);
+            cin>>groupid;
+            send2tracker(tracker_ip,tracker_port,ip,port,filename,groupid);
         }
     }   
 }

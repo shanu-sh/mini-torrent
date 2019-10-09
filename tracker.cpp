@@ -39,6 +39,7 @@ void *func(void * arg)
         int nsockid;
 
         char buffer[BUFFSIZE];
+        bool flag=false;
 
         recv(cval,( void*)buffer,sizeof(buffer),0);
         cout<<"sending port\n";
@@ -53,9 +54,17 @@ void *func(void * arg)
                 strcpy(buffer,temp.c_str());
                 send(cval,(const void*)buffer,sizeof(buffer),0);
 
+                flag=true;
                 break;
             }
             
+        }
+
+        if(flag==false)
+        {
+            memset(buffer,'\0',BUFFSIZE);
+            strcpy(buffer,"not_present ");
+            send(cval,(const void*)buffer,sizeof(buffer),0);
         }
     }
     else if(command==1)
@@ -72,6 +81,7 @@ void *func(void * arg)
         ss>>temp.filename;
         ss>>temp.ip;
         ss>>temp.port;
+        ss>>temp.group_id;
 
         memset(buffer,'\0',BUFFSIZE);
         string hash="";
@@ -87,7 +97,7 @@ void *func(void * arg)
         temp.hash=hash;
         arr.push_back(temp);
 
-        cout<<arr[0].ip<<"\n";
+        cout<<arr[arr.size()-1].filename<<" "<<arr[arr.size()-1].group_id<<"\n";
         cout<<"Upload done\n";
     }
     close(cval);
