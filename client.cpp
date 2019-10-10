@@ -97,7 +97,7 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     if(fp==NULL)
     {
         cout<<file;
-        cout<<"FIle not Present\n";
+        cout<<" not Present\n";
         return;
     }
     
@@ -207,7 +207,7 @@ void recvfromtracker(string ip,int port)
 
     connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
 
-    //Sends the control information to client
+    //Sends the control information to tracker
     send(sockid,(const void*)&control,sizeof(control),0);
     send(sockid,(const void *)data,sizeof(data),0);
 
@@ -216,10 +216,14 @@ void recvfromtracker(string ip,int port)
     memset(data,'\0',BUFFSIZE);
     //recv(sockid,data,BUFFSIZE,0);
     
+    vector<host_data> hosts;
+
     while((n=recv(sockid,buffer,BUFFSIZE,0))>0)
     {
         cout<<buffer<<"\n";
         stringstream ss(buffer);
+
+        struct host_data hdata;
         ss>>dip;
 
         if(dip.compare("not_present")==0)
@@ -229,15 +233,22 @@ void recvfromtracker(string ip,int port)
         }
 
         ss>>dp;
+        hdata.ip=dip;
         dport=stoi(dp);
+
+        hdata.port=dport;
+
+        hosts.push_back(hdata);
+
+        
         cout<<dport<<"\n";
         cout<<dip<<"\n";
     }
+
+    cout<<"No of hosts present is "<<hosts.size()<<" \n";
     close(sockid);
 
-    //dport=7000;
-    //Now connect to client to download file (client to client communication)
-
+    //Now connect to client server to get the total count of chunk present
     sockid=socket(AF_INET,SOCK_STREAM,0);
     cout<<"Socket created\n";
     if(sockid<0)
@@ -252,13 +263,39 @@ void recvfromtracker(string ip,int port)
 
     connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
 
+    //Sends the control information to client server
+    control=0;
+    send(sockid,(const void*)&control,sizeof(control),0);
+
+    close(sockid);
+    //Now connect to client to download file (client to client communication)
+
+    
     long filesize;
 
     //sending filename to the other client
 
-    strcpy(buffer,filename.c_str());
-    send(sockid, buffer, sizeof(buffer), 0);
+    sockid=socket(AF_INET,SOCK_STREAM,0);
+    cout<<"Socket created\n";
+    if(sockid<0)
+    {
+        perror("Error in socket creation\n");
+        exit(1);
+    }
 
+    serveraddr.sin_family=AF_INET;
+    serveraddr.sin_port=htons(dport);
+    serveraddr.sin_addr.s_addr=inet_addr(dip.c_str());
+
+    connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
+    control=1;
+    send(sockid,(const void*)&control,sizeof(control),0);
+
+    memset(buffer,'\0',BUFFSIZE);
+    strcpy(buffer,filename.c_str());
+
+    cout<<"Sending file name "<<buffer<<"\n";
+    send(sockid, buffer, sizeof(buffer), 0);
 
     recv(sockid, &filesize, sizeof(filesize), 0);
 
@@ -276,6 +313,53 @@ void recvfromtracker(string ip,int port)
     // cout<<"outer "<<filesize<<"\n";
     close(sockid);
     fclose(fp);
+}
+
+void transferfiles(int cid)
+{
+    int command,n;
+    
+    // int *cval=(int*)arg;
+    // int cid=*cval;
+
+    char buffer[BUFFSIZE];
+
+        recv(cid,( void*)&command,sizeof(command),0);
+
+        if(command==0)
+        {
+            //Send the chunk count to the requesting client
+            cout<<"Sending chunk size\n";
+        }
+
+        else if(command==1)
+        {
+            //For the filename start sending the file
+            cout<<"Starting transfer of file\n";
+
+            memset(buffer,'\0',BUFFSIZE);
+
+            recv(cid,buffer,sizeof(buffer),0);
+            cout<<buffer<<"\n";
+
+            FILE *fp;
+            fp=fopen(buffer,"rb");
+            fseek(fp,0,SEEK_END);
+
+            long size=ftell(fp);
+            rewind(fp);
+
+            send(cid,&size,sizeof(size),0);
+
+            while((n=fread(buffer,sizeof(char),BUFFSIZE,fp))>0 && size>0)
+            {
+                send(cid,buffer,n,0);
+                memset(buffer,'\0',BUFFSIZE);
+                size=size-n;
+            }
+            fclose(fp);
+        }
+    
 }
 
 void *funcd(void * arg)
@@ -299,32 +383,16 @@ void *funcd(void * arg)
 
     listen(sockid,3);
 
+    pthread_t ids[BUFFSIZE];
+    int count=0;
+
     while(1)
     {
         cid=accept(sockid,(struct sockaddr*)&addr,(socklen_t*)&len);
 
         //First recevive file name
-
-        recv(cid,buffer,sizeof(buffer),0);
-        cout<<buffer<<"\n";
-
-        FILE *fp;
-        fp=fopen(buffer,"rb");
-        fseek(fp,0,SEEK_END);
-
-        long size=ftell(fp);
-        rewind(fp);
-
-        send(cid,&size,sizeof(size),0);
-
-        while((n=fread(buffer,sizeof(char),BUFFSIZE,fp))>0 && size>0)
-        {
-            send(cid,buffer,n,0);
-            memset(buffer,'\0',BUFFSIZE);
-            size=size-n;
-        }
-
-        fclose(fp);
+        transferfiles(cid);
+        
     }
 }
 
