@@ -7,11 +7,18 @@
 #include<pthread.h>
 #include<iostream>
 #include<sstream>
+#include<vector>
 #include<openssl/sha.h>
 
 #define BUFFSIZE 512
 
 using namespace std;
+
+struct client_data
+{
+    string filename;
+    vector<string> chunks;
+};
 
 struct host_data
 {
@@ -19,7 +26,11 @@ struct host_data
     int port;
 };
 
-bool login_status=false;
+vector<client_data> arr;
+
+FILE *tr;
+
+bool login_status=true;
 
 string computehash(string str)
 {
@@ -79,6 +90,10 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
 
     FILE *fp;
     fp=fopen(file.c_str(),"rb");
+
+    struct client_data cdata;
+    cdata.filename=file;
+
     if(fp==NULL)
     {
         cout<<file;
@@ -95,7 +110,7 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     int chunkcount=0;
     //Reading file and calculating hash and sending to tracker
 
-    while((n=fread(buffer,sizeof(char),BUFFSIZE,fp))>0 && size>0)
+    while( size>0&&(n=fread(buffer,sizeof(char),BUFFSIZE,fp))>0)
     {
         //send(cid,buffer,n,0);
 
@@ -108,15 +123,51 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
         memset(buffer,'\0',BUFFSIZE);
 
         strcpy(buffer,hash.c_str());
-        send(sockid,buffer,SHA_DIGEST_LENGTH*2,0);
+        //send(sockid,buffer,SHA_DIGEST_LENGTH*2,0);
 
         memset(buffer,'\0',BUFFSIZE);
 
+        cdata.chunks.push_back(to_string(chunkcount));
+
         chunkcount++;
         size=size-n;
+
     }
 
+    if(n!=0)
+    {
+        cdata.chunks.push_back(to_string(chunkcount));
+    }
+
+    arr.push_back(cdata);
+
+    string fdata;
+
+    fdata=cdata.filename+" ";
+    for(int i=0;i<cdata.chunks.size();i++)
+    {
+        if(i!=cdata.chunks.size()-1)
+            fdata=fdata+cdata.chunks[i]+" ";
+        else
+            fdata=fdata+cdata.chunks[i]+"\n";
+    }
+
+    strcpy(buffer,fdata.c_str());
+
+    fwrite(buffer,sizeof(char),strlen(buffer),tr);
+    fflush(tr);
+
     cout<<"No of chunks created "<<chunkcount<<"\n";
+    cout<<"Last chunk size is "<<n<<"\n";
+
+    memset(buffer,'\0',sizeof(buffer));
+    string t=to_string(n)+" "+to_string(chunkcount);
+    strcpy(buffer,t.c_str());
+
+    cout<<buffer<<"\n";
+    send(sockid,buffer,BUFFSIZE,0);
+    
+
     fclose(fp);
 
     close(sockid);
@@ -129,6 +180,9 @@ void recvfromtracker(string ip,int port)
     int group_id;
     int sockid,n,cid,len;
     char buffer[BUFFSIZE];
+
+    int dport;
+    string dip,dp;
 
     sockid=socket(AF_INET,SOCK_STREAM,0);
 
@@ -160,25 +214,28 @@ void recvfromtracker(string ip,int port)
     //Wait  for server to communicate back
 
     memset(data,'\0',BUFFSIZE);
-    recv(sockid,data,BUFFSIZE,0);
+    //recv(sockid,data,BUFFSIZE,0);
     
-    stringstream ss(data);
-
-    int dport;
-    string dip,dp;
-    ss>>dip;
-
-    if(dip.compare("not_present")==0)
+    while((n=recv(sockid,buffer,BUFFSIZE,0))>0)
     {
-        cout<<"File not uploaded in tracker\n";
-        return;
+        cout<<buffer<<"\n";
+        stringstream ss(buffer);
+        ss>>dip;
+
+        if(dip.compare("not_present")==0)
+        {
+            cout<<"File not uploaded in tracker\n";
+            return;
+        }
+
+        ss>>dp;
+        dport=stoi(dp);
+        cout<<dport<<"\n";
+        cout<<dip<<"\n";
     }
-    ss>>dp;
-    dport=stoi(dp);
-    cout<<dport<<"\n";
-    cout<<dip<<"\n";
     close(sockid);
 
+    //dport=7000;
     //Now connect to client to download file (client to client communication)
 
     sockid=socket(AF_INET,SOCK_STREAM,0);
@@ -368,9 +425,32 @@ int main(int argc,char **argv)
     int port=stoi(argv[2]);
     string cmd;
 
-    string user_id,password;
+    char buffer[BUFFSIZE];
 
+    string user_id,password;
     struct host_data data;
+
+    tr=fopen("client_data.txt","r");
+    if(tr!=NULL)
+    {
+        while(fscanf(tr,"%[^\n]\n",buffer)!=EOF)
+        {
+            cout<<buffer<<"\n";
+            stringstream ss(buffer);
+
+            struct client_data temp;
+            string t;
+
+            ss>>temp.filename;
+            while(ss>>t)
+                temp.chunks.push_back(t);
+
+            arr.push_back(temp);
+        }
+        fclose(tr);
+    }
+
+    tr=fopen("client_data.txt","a");
 
     data.ip=ip;
     data.port=port;
@@ -453,6 +533,5 @@ int main(int argc,char **argv)
             }
             
         }
-
     }   
 }

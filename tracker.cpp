@@ -12,6 +12,7 @@
 #include<unordered_map>
 
 #define BUFFSIZE 512
+#define CHUNKSIZE 524288
 
 using namespace std;
 
@@ -22,7 +23,14 @@ struct trackerdata
     string group_id;
     string hash;
     string filename;
-    vector<int> chunk;
+    string nofchunk;
+    string lastchunksize; 
+};
+
+struct host_data
+{
+    string ip;
+    string port;
 };
 
 vector<struct trackerdata> arr;
@@ -59,31 +67,52 @@ void *func(void * arg)
         string filename;
         string group_id;
 
+        //Stores the list of client having the same file
+        vector<host_data> result;
+
         recv(cval,( void*)buffer,sizeof(buffer),0);
 
         stringstream ss(buffer);
 
         ss>>filename;
         ss>>group_id;
+
+        struct host_data temp;
         cout<<"sending port\n";
 
         for(auto x:arr)
         {
             if(x.filename.compare(filename)==0 && x.group_id.compare(group_id)==0)
             {
+                // //string temp=x.ip+" "+x.port;
+                // memset(buffer,'\0',BUFFSIZE);
+
+                // strcpy(buffer,temp.c_str());
+                // //send(cval,(const void*)buffer,sizeof(buffer),0);
+
+                temp.ip=x.ip;
+                temp.port=x.port;
+                result.push_back(temp);
+                flag=true;
+                
+            }
+            
+        }
+        if(flag)
+        {
+            for(auto x:result)
+            {
+                cout<<"ip is "<<x.ip<<" and port is "<<x.port<<"\n";
                 string temp=x.ip+" "+x.port;
                 memset(buffer,'\0',BUFFSIZE);
 
                 strcpy(buffer,temp.c_str());
                 send(cval,(const void*)buffer,sizeof(buffer),0);
 
-                flag=true;
-                break;
             }
-            
         }
 
-        if(flag==false)
+        else if(flag==false)
         {
             memset(buffer,'\0',BUFFSIZE);
             strcpy(buffer,"not_present ");
@@ -109,19 +138,34 @@ void *func(void * arg)
         memset(buffer,'\0',BUFFSIZE);
         string hash="";
         int n;
-        while((n=recv(cval,buffer,BUFFSIZE,0))>0 )
-        {
-            hash=hash+buffer;
-            // cout<<n<<"\n";
-            memset(buffer,'\0',BUFFSIZE);
-        }
+        // while((n=recv(cval,buffer,BUFFSIZE,0))>0 )
+        // {
+        //     hash=hash+buffer;
+        //     // cout<<n<<"\n";
+        //     memset(buffer,'\0',BUFFSIZE);
+        // }
 
         cout<<"Recieved hash is "<<hash<<"\n";
         temp.hash=hash;
         arr.push_back(temp);
 
-        char data[BUFFSIZE];
-        string filedata=temp.filename+" "+temp.ip+" "+temp.port+" "+temp.group_id+" "+temp.hash+"\n";
+        char data[100000];
+        string filedata=temp.filename+" "+temp.ip+" "+temp.port+" "+temp.group_id+"\n";
+        //Add it later  //+temp.hash+"\n";
+
+        memset(buffer,'\0',BUFFSIZE);
+        recv(cval,buffer,BUFFSIZE,0);
+
+        stringstream ss1(buffer);
+
+        int chunkcount,lastchunk;
+
+        ss1>>lastchunk;
+        ss1>>chunkcount;
+        cout<<"No of chunks present is "<<chunkcount<<"and lasr is "<<lastchunk<<"\n";
+
+
+
         strcpy(data,filedata.c_str());
 
         fwrite(data,sizeof(char),strlen(data),tr);
@@ -248,7 +292,9 @@ int main()
             ss>>temp.ip;
             ss>>temp.port;
             ss>>temp.group_id;
-            ss>>temp.hash;
+            //ss>>temp.hash;"
+
+            cout<<temp.ip<<" "<<temp.port<<"\n";
             arr.push_back(temp);
         
         }
@@ -267,7 +313,6 @@ int main()
             string user_id;
             string password;
 
-            struct trackerdata temp;
             ss>>user_id;
             ss>>password;
             
