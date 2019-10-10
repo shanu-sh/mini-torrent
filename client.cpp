@@ -263,9 +263,21 @@ void recvfromtracker(string ip,int port)
 
     connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
 
-    //Sends the control information to client server
+    //Sends the control information to client server to get the no of chunks
     control=0;
     send(sockid,(const void*)&control,sizeof(control),0);
+    strcpy(buffer,filename.c_str());
+    send(sockid, buffer, sizeof(buffer), 0);
+    recv(sockid,buffer,BUFFSIZE,0);
+
+    cout<<buffer<<"\n";
+    int chunkcount;
+    string temp;
+
+    stringstream ss(buffer);
+    ss>>temp;
+    chunkcount=stoi(temp);
+    cout<<"Chunk present is "<<chunkcount<<"\n";
 
     close(sockid);
     //Now connect to client to download file (client to client communication)
@@ -324,42 +336,61 @@ void transferfiles(int cid)
 
     char buffer[BUFFSIZE];
 
-        recv(cid,( void*)&command,sizeof(command),0);
+    recv(cid,( void*)&command,sizeof(command),0);
 
-        if(command==0)
+    if(command==0)
+    {
+        //Send the chunk count to the requesting client
+        cout<<"Sending chunk size\n";
+
+        //received the filename
+        recv(cid,buffer,sizeof(buffer),0);
+
+        cout<<"file name is "<<buffer<<"\n";
+        string filename(buffer);
+        cout<<buffer<<"\n";
+
+        for(auto x:arr)
         {
-            //Send the chunk count to the requesting client
-            cout<<"Sending chunk size\n";
-        }
-
-        else if(command==1)
-        {
-            //For the filename start sending the file
-            cout<<"Starting transfer of file\n";
-
-            memset(buffer,'\0',BUFFSIZE);
-
-            recv(cid,buffer,sizeof(buffer),0);
-            cout<<buffer<<"\n";
-
-            FILE *fp;
-            fp=fopen(buffer,"rb");
-            fseek(fp,0,SEEK_END);
-
-            long size=ftell(fp);
-            rewind(fp);
-
-            send(cid,&size,sizeof(size),0);
-
-            while((n=fread(buffer,sizeof(char),BUFFSIZE,fp))>0 && size>0)
+            if(x.filename.compare(filename)==0)
             {
-                send(cid,buffer,n,0);
-                memset(buffer,'\0',BUFFSIZE);
-                size=size-n;
+                string sdata=to_string(x.chunks.size());
+                cout<<sdata<<"\n";
+                strcpy(buffer,sdata.c_str());
+                send(cid,buffer,sizeof(buffer),0);
+                break;
             }
-            fclose(fp);
         }
-    
+
+    }
+
+    else if(command==1)
+    {
+        //For the filename start sending the file
+        cout<<"Starting transfer of file\n";
+
+        memset(buffer,'\0',BUFFSIZE);
+
+        recv(cid,buffer,sizeof(buffer),0);
+        cout<<buffer<<"\n";
+
+        FILE *fp;
+        fp=fopen(buffer,"rb");
+        fseek(fp,0,SEEK_END);
+
+        long size=ftell(fp);
+        rewind(fp);
+
+        send(cid,&size,sizeof(size),0);
+
+        while((n=fread(buffer,sizeof(char),BUFFSIZE,fp))>0 && size>0)
+        {
+            send(cid,buffer,n,0);
+            memset(buffer,'\0',BUFFSIZE);
+            size=size-n;
+        }
+        fclose(fp);
+    }
 }
 
 void *funcd(void * arg)
