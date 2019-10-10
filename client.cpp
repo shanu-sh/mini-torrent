@@ -249,39 +249,58 @@ void recvfromtracker(string ip,int port)
     close(sockid);
 
     //Now connect to client server to get the total count of chunk present
-    sockid=socket(AF_INET,SOCK_STREAM,0);
-    cout<<"Socket created\n";
-    if(sockid<0)
+
+    vector<int> chunkdata;
+    for(int i=0;i<hosts.size();i++)
     {
-        perror("Error in socket creation\n");
-        exit(1);
+        sockid=socket(AF_INET,SOCK_STREAM,0);
+        cout<<"Socket created\n";
+        if(sockid<0)
+        {
+            perror("Error in socket creation\n");
+            exit(1);
+        }
+
+        cout<<"ip is "<<hosts[i].ip<<" "<<hosts[i].port<<" \n";
+        serveraddr.sin_family=AF_INET;
+        serveraddr.sin_port=htons(hosts[i].port);
+        serveraddr.sin_addr.s_addr=inet_addr(hosts[i].ip.c_str());
+
+        connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
+
+        //Sends the control information to client server to get the no of chunks
+        control=0;
+        send(sockid,(const void*)&control,sizeof(control),0);
+        strcpy(buffer,filename.c_str());
+        send(sockid, buffer, sizeof(buffer), 0);
+        recv(sockid,buffer,BUFFSIZE,0);
+
+        cout<<buffer<<"\n";
+        int chunkcount;
+        string temp;
+
+        stringstream ss(buffer);
+        ss>>temp;
+        chunkcount=stoi(temp);
+        cout<<"Chunk present is "<<chunkcount<<"\n";
+        chunkdata.push_back(chunkcount);
+        close(sockid);
     }
 
-    serveraddr.sin_family=AF_INET;
-    serveraddr.sin_port=htons(dport);
-    serveraddr.sin_addr.s_addr=inet_addr(dip.c_str());
+    for(int i=0;i<hosts.size();i++)
+    {
+        cout<<hosts[i].port<<" "<<chunkdata[i]<<" \n";
+    }
 
-    connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
 
-    //Sends the control information to client server to get the no of chunks
-    control=0;
-    send(sockid,(const void*)&control,sizeof(control),0);
-    strcpy(buffer,filename.c_str());
-    send(sockid, buffer, sizeof(buffer), 0);
-    recv(sockid,buffer,BUFFSIZE,0);
+    //First Write logic of how to get which part from which client
 
-    cout<<buffer<<"\n";
-    int chunkcount;
-    string temp;
+    for(int i=0;i<hosts.size();i++)
+    {
 
-    stringstream ss(buffer);
-    ss>>temp;
-    chunkcount=stoi(temp);
-    cout<<"Chunk present is "<<chunkcount<<"\n";
+    }
 
-    close(sockid);
     //Now connect to client to download file (client to client communication)
-
     
     long filesize;
 
@@ -331,9 +350,6 @@ void transferfiles(int cid)
 {
     int command,n;
     
-    // int *cval=(int*)arg;
-    // int cid=*cval;
-
     char buffer[BUFFSIZE];
 
     recv(cid,( void*)&command,sizeof(command),0);
