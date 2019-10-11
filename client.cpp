@@ -26,7 +26,18 @@ struct host_data
     int port;
 };
 
+struct filetransfer_data
+{
+    int offset;
+    int part;
+    int noofclients;
+    string filename;
+    string ip;
+    int port;
+};
+
 vector<client_data> arr;
+pthread_mutex_t lock;
 
 FILE *tr;
 
@@ -89,7 +100,7 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     //Now we need to create hash and send to the tracker
 
     FILE *fp;
-    fp=fopen(file.c_str(),"rb");
+    fp=fopen(file.c_str(),"r");
 
     struct client_data cdata;
     cdata.filename=file;
@@ -171,6 +182,86 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     fclose(fp);
 
     close(sockid);
+}
+
+FILE * fp;
+
+void *requestforfilesinchunks(void * arg)
+{
+
+    pthread_mutex_lock(&lock);
+    struct filetransfer_data *ptr=(struct filetransfer_data *)arg;
+
+    struct filetransfer_data temp=*ptr;
+
+    cout<<"is offest "<<temp.offset<<"\n";
+
+    int i=temp.offset;
+    int part=temp.part;
+    int control,n;
+    char buffer[BUFFSIZE];
+    int noofclients=temp.noofclients;
+    string filename=temp.filename;
+
+    int port=temp.port;
+    string ip=temp.ip;
+
+    int client=i/part;
+    if(client>=noofclients)
+        client=noofclients-1;
+    
+    cout<<client<<" is client \n";
+    
+    int sockid=socket(AF_INET,SOCK_STREAM,0);
+    cout<<"Socket created\n";
+
+    if(sockid<0)
+    {
+        perror("Error in socket creation\n");
+        exit(1);
+    }
+
+    cout<<i<<" is i and client is "<<client<<"\n";
+
+    struct sockaddr_in serveraddr;
+    serveraddr.sin_family=AF_INET;
+    serveraddr.sin_port=htons(port);
+    serveraddr.sin_addr.s_addr=inet_addr(ip.c_str());
+
+    connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
+    control=1;
+    send(sockid,(const void*)&control,sizeof(control),0);
+
+    memset(buffer,'\0',BUFFSIZE);
+    strcpy(buffer,filename.c_str());
+
+    cout<<"Sending file name "<<buffer<<"\n";
+    send(sockid, buffer, sizeof(buffer), 0);
+
+    //Now send the file offset which you want to read
+
+    strcpy(buffer,to_string(i).c_str());
+    send(sockid, buffer,BUFFSIZE, 0);
+
+    cout<<"Name sent to client server\n";
+    //recv(sockid, &filesize, sizeof(filesize), 0);
+
+    
+    cout<<"Waiting for server to send data\n";
+
+    n=recv(sockid,buffer,BUFFSIZE,0);
+
+    cout<<"value read in client is "<<buffer<<"\n";
+
+    rewind(fp);
+    fseek(fp,i*BUFFSIZE,SEEK_SET);
+    fwrite(buffer,sizeof(char),n,fp);
+    fflush(fp);
+
+    cout<<"File written in client for offset "<<i<<"\n";
+    close(sockid);
+    pthread_mutex_unlock(&lock);
+   
 }
 
 void recvfromtracker(string ip,int port)
@@ -287,78 +378,59 @@ void recvfromtracker(string ip,int port)
         close(sockid);
     }
 
+    long filesize=0;
+
     for(int i=0;i<hosts.size();i++)
     {
-        cout<<hosts[i].port<<" "<<chunkdata[i]<<" \n";
+        cout<<hosts[i].port<<" is host "<<chunkdata[i]<<" \n";
+        filesize+=chunkdata[i];
     }
 
-
     //First Write logic of how to get which part from which client
+    cout<<"File size is "<<filesize<<"\n";
 
+    filesize=20818;
     int totlch=chunkdata[0]-1;
     int noofclients=hosts.size();
 
     int part=totlch/noofclients;
-    long filesize;
+    
 
+    //creating file with temp values
+    char buffer1[filesize]={'\0'};
+    fp=fopen(filename.c_str(),"w+");
+    fwrite(buffer1,sizeof(char),filesize,fp);
+    fflush(fp);
+    //fclose(fp);
+   
     cout<<"Total chunks is "<<totlch<<" no of cients "<<noofclients<<" part "<<part<<" \n";
+    pthread_t ids[BUFFSIZE];
+
+    int count=0;
+    
+    vector<filetransfer_data> farr;
     for(int i=0;i<totlch;i++)
     {
+        struct filetransfer_data *temp=new struct filetransfer_data;
+
         int client=i/part;
+
         if(client>=noofclients)
             client=noofclients-1;
-        cout<<client<<" is client \n";
-        sockid=socket(AF_INET,SOCK_STREAM,0);
-        cout<<"Socket created\n";
-        if(sockid<0)
-        {
-            perror("Error in socket creation\n");
-            exit(1);
-        }
 
-        cout<<i<<" is i and client is "<<client<<"\n";
+        temp->offset=i;
+        temp->part=part;
+        temp->noofclients=noofclients;
+        temp->filename=filename;
+        temp->port=hosts[client].port;
+        temp->ip=hosts[client].ip;
 
-        serveraddr.sin_family=AF_INET;
-        serveraddr.sin_port=htons(hosts[client].port);
-        serveraddr.sin_addr.s_addr=inet_addr(hosts[client].ip.c_str());
+        cout<<"\n"<<i<<" and offset is "<<temp->offset<<"\n";
 
-        connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
-        control=1;
-        send(sockid,(const void*)&control,sizeof(control),0);
-
-        memset(buffer,'\0',BUFFSIZE);
-        strcpy(buffer,filename.c_str());
-
-        cout<<"Sending file name "<<buffer<<"\n";
-        send(sockid, buffer, sizeof(buffer), 0);
-
-        //Now send the file offset which you want to read
-
-        strcpy(buffer,to_string(i).c_str());
-        send(sockid, buffer, sizeof(buffer), 0);
-
-        cout<<"Name sent to client server\n";
-        //recv(sockid, &filesize, sizeof(filesize), 0);
-    
-        FILE *fp;
-
-        if(i==0)
-            fp=fopen(filename.c_str(),"w");
-        else
-            fp=fopen(filename.c_str(),"a");
         
-        cout<<"Waiting for server to send data\n";
-
-        n=recv(sockid,buffer,BUFFSIZE,0);
-
-        cout<<"value read in client is "<<buffer<<"\n";
-        fwrite(buffer,sizeof(char),n,fp);
-        fflush(fp);
-
-        close(sockid);
-        fclose(fp);
+        pthread_create(&ids[count],NULL,requestforfilesinchunks,(void*)temp);
+        pthread_detach(ids[count++]); 
     }
-
 }
 
 void transferfiles(int cid)
@@ -406,10 +478,10 @@ void transferfiles(int cid)
         memset(buffer,'\0',BUFFSIZE);
 
         recv(cid,buffer,sizeof(buffer),0);
-        cout<<buffer<<"\n";
+        //cout<<buffer<<"\n";
 
         FILE *fp;
-        fp=fopen(buffer,"rb");
+        fp=fopen(buffer,"r");
 
         //get the offset
         recv(cid,buffer,sizeof(buffer),0);
