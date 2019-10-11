@@ -295,55 +295,70 @@ void recvfromtracker(string ip,int port)
 
     //First Write logic of how to get which part from which client
 
-    for(int i=0;i<hosts.size();i++)
-    {
+    int totlch=chunkdata[0]-1;
+    int noofclients=hosts.size();
 
-    }
-
-    //Now connect to client to download file (client to client communication)
-    
+    int part=totlch/noofclients;
     long filesize;
 
-    //sending filename to the other client
-
-    sockid=socket(AF_INET,SOCK_STREAM,0);
-    cout<<"Socket created\n";
-    if(sockid<0)
+    cout<<"Total chunks is "<<totlch<<" no of cients "<<noofclients<<" part "<<part<<" \n";
+    for(int i=0;i<totlch;i++)
     {
-        perror("Error in socket creation\n");
-        exit(1);
-    }
+        int client=i/part;
+        if(client>=noofclients)
+            client=noofclients-1;
+        cout<<client<<" is client \n";
+        sockid=socket(AF_INET,SOCK_STREAM,0);
+        cout<<"Socket created\n";
+        if(sockid<0)
+        {
+            perror("Error in socket creation\n");
+            exit(1);
+        }
 
-    serveraddr.sin_family=AF_INET;
-    serveraddr.sin_port=htons(dport);
-    serveraddr.sin_addr.s_addr=inet_addr(dip.c_str());
+        cout<<i<<" is i and client is "<<client<<"\n";
 
-    connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
-    control=1;
-    send(sockid,(const void*)&control,sizeof(control),0);
+        serveraddr.sin_family=AF_INET;
+        serveraddr.sin_port=htons(hosts[client].port);
+        serveraddr.sin_addr.s_addr=inet_addr(hosts[client].ip.c_str());
 
-    memset(buffer,'\0',BUFFSIZE);
-    strcpy(buffer,filename.c_str());
+        connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
+        control=1;
+        send(sockid,(const void*)&control,sizeof(control),0);
 
-    cout<<"Sending file name "<<buffer<<"\n";
-    send(sockid, buffer, sizeof(buffer), 0);
-
-    recv(sockid, &filesize, sizeof(filesize), 0);
-
-   
-    FILE *fp=fopen(filename.c_str(),"wb");
-    
-    while(filesize>0 && (n=recv(sockid,buffer,BUFFSIZE,0))>0 )
-    {
-        fwrite(buffer,sizeof(char),n,fp);
-        // cout<<n<<"\n";
         memset(buffer,'\0',BUFFSIZE);
-        filesize=filesize-n;
-        // cout<<filesize<<"\n";
+        strcpy(buffer,filename.c_str());
+
+        cout<<"Sending file name "<<buffer<<"\n";
+        send(sockid, buffer, sizeof(buffer), 0);
+
+        //Now send the file offset which you want to read
+
+        strcpy(buffer,to_string(i).c_str());
+        send(sockid, buffer, sizeof(buffer), 0);
+
+        cout<<"Name sent to client server\n";
+        //recv(sockid, &filesize, sizeof(filesize), 0);
+    
+        FILE *fp;
+
+        if(i==0)
+            fp=fopen(filename.c_str(),"w");
+        else
+            fp=fopen(filename.c_str(),"a");
+        
+        cout<<"Waiting for server to send data\n";
+
+        n=recv(sockid,buffer,BUFFSIZE,0);
+
+        cout<<"value read in client is "<<buffer<<"\n";
+        fwrite(buffer,sizeof(char),n,fp);
+        fflush(fp);
+
+        close(sockid);
+        fclose(fp);
     }
-    // cout<<"outer "<<filesize<<"\n";
-    close(sockid);
-    fclose(fp);
+
 }
 
 void transferfiles(int cid)
@@ -382,6 +397,9 @@ void transferfiles(int cid)
 
     else if(command==1)
     {
+        int offset;
+        string temp;
+
         //For the filename start sending the file
         cout<<"Starting transfer of file\n";
 
@@ -392,19 +410,25 @@ void transferfiles(int cid)
 
         FILE *fp;
         fp=fopen(buffer,"rb");
-        fseek(fp,0,SEEK_END);
 
-        long size=ftell(fp);
-        rewind(fp);
+        //get the offset
+        recv(cid,buffer,sizeof(buffer),0);
+        stringstream ss(buffer);
+        ss>>offset;
 
-        send(cid,&size,sizeof(size),0);
+        cout<<"Offset received is "<<offset<<"\n";
 
-        while((n=fread(buffer,sizeof(char),BUFFSIZE,fp))>0 && size>0)
-        {
-            send(cid,buffer,n,0);
-            memset(buffer,'\0',BUFFSIZE);
-            size=size-n;
-        }
+        fseek(fp,offset*BUFFSIZE,SEEK_SET);
+
+        //Now you have to recieve the offset
+
+        n=fread(buffer,sizeof(char),BUFFSIZE,fp);
+        cout<<"Value read from file is "<<buffer<<endl;
+
+        cout<<"Count of value is "<<n<<endl;
+        send(cid,buffer,n,0);
+            
+        cout<<"Value sent\n";
         fclose(fp);
     }
 }
@@ -591,7 +615,6 @@ int main(int argc,char **argv)
             {
                 cout<<"Please log in \n";
             }
-            
         }
 
         if(cmd.compare("upload")==0)
@@ -605,8 +628,7 @@ int main(int argc,char **argv)
             else
             {
                 cout<<"Please log in \n";
-            }
-            
+            }          
         }
 
         if(cmd.compare("create_user")==0)
