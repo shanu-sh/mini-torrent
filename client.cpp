@@ -27,6 +27,7 @@ struct host_data
     string ip;
     int port;
     long filesize;
+
 };
 
 struct filetransfer_data
@@ -38,6 +39,7 @@ struct filetransfer_data
     int port;
     long filesize;
     int client;
+    int chunkstoberead;
 };
 
 vector<client_data> arr;
@@ -187,12 +189,11 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     close(sockid);
 }
 
-FILE * fp;
-
 void *requestforfilesinchunks(void * arg)
 {
 
     pthread_mutex_lock(&lock);
+    FILE * fpt;
     struct filetransfer_data *ptr=(struct filetransfer_data *)arg;
 
     struct filetransfer_data temp=*ptr;
@@ -239,34 +240,36 @@ void *requestforfilesinchunks(void * arg)
 
     send(sockid, buffer,BUFFSIZE, 0);
 
-    cout<<"Name sent to client server\n";
-    //recv(sockid, &filesize, sizeof(filesize), 0);
+    int datatoberead=temp.chunkstoberead;
 
-    
+    strcpy(buffer,to_string(datatoberead).c_str());
+    send(sockid, buffer,BUFFSIZE, 0);
+
     cout<<"Waiting for server to send data\n";
 
     //n=recv(sockid,buffer,BUFFSIZE,0);
     int packetsize=0;
     char packet[PACKETSIZE];
+    fpt=fopen(filename.c_str(),"r+");
+    rewind(fpt);
+    fseek(fpt,i*CHUNKSIZE,SEEK_SET);
 
-    rewind(fp);
-    fseek(fp,i*BUFFSIZE,SEEK_SET);
-
-    while(packetsize<CHUNKSIZE && (n=recv(sockid,packet,PACKETSIZE,0))>0)
+    
+    while(packetsize<datatoberead && (n=recv(sockid,packet,PACKETSIZE,0))>0)
     {
         
         cout<<"Value read in packet is "<<buffer<<" and csize is "<<packetsize<<"\n";
         packetsize=packetsize+n;
         
-        fwrite(packet,sizeof(char),n,fp);
-        fflush(fp);
+        fwrite(packet,sizeof(char),n,fpt);
+        
 
-        if(n<PACKETSIZE)
-            break;
     }
+    fflush(fpt);
 
     cout<<"File written in client for offset "<<i<<"\n";
     close(sockid);
+    fclose(fpt);
     pthread_mutex_unlock(&lock);
    
 }
@@ -341,8 +344,9 @@ void recvfromtracker(string ip,int port)
 
         hdata.port=dport;
         hdata.filesize=filesize;
+
         hosts.push_back(hdata);
-        cout<<"Host received is "<<hdata.ip<<" "<<hdata.port<<" "<<hdata.filesize<<" ";
+        cout<<"Host received is "<<hdata.ip<<" "<<hdata.port<<" "<<hdata.filesize<<" \n";
         memset(buffer,'\0',BUFFSIZE);
     }
 
@@ -404,13 +408,13 @@ void recvfromtracker(string ip,int port)
 
     int part=totlch/noofclients;
     
-
+    FILE * fpt;
     //creating file with temp values
     char buffer1[filesize]={'\0'};
-    fp=fopen(filename.c_str(),"w+");
-    fwrite(buffer1,sizeof(char),filesize,fp);
-    fflush(fp);
-    //fclose(fp);
+    fpt=fopen(filename.c_str(),"w");
+    fwrite(buffer1,sizeof(char),filesize,fpt);
+    fflush(fpt);
+    fclose(fpt);
    
     cout<<"Total chunks is "<<totlch<<" no of cients "<<noofclients<<" part "<<part<<" \n";
     pthread_t ids[BUFFSIZE];
@@ -431,7 +435,16 @@ void recvfromtracker(string ip,int port)
         temp->ip=hosts[client].ip;
         temp->client=client;
 
-        cout<<"\n"<<" offset is "<<temp->offset<<" port is "<<temp->port<<"\n";
+        
+        
+        if(filesize>CHUNKSIZE)
+            temp->chunkstoberead=CHUNKSIZE;
+        else
+            temp->chunkstoberead=filesize;
+
+        filesize=filesize-CHUNKSIZE;
+
+        cout<<"\n"<<" offset is "<<temp->offset<<" port is "<<temp->port<<" and chunks to be read is"<<temp->chunkstoberead<<"\n";
 
         
         pthread_create(&ids[count],NULL,requestforfilesinchunks,(void*)temp);
@@ -439,10 +452,11 @@ void recvfromtracker(string ip,int port)
     }
 }
 
-void transferfiles(int cid)
+void *transferfiles(void *arg)
 {
+    int *a=(int*)arg;
+    int cid=*a;
 
-    pthread_mutex_lock(&lock1);
     int command,n;
     
     char buffer[BUFFSIZE];
@@ -497,10 +511,16 @@ void transferfiles(int cid)
         stringstream ss(buffer);
         ss>>offset;
 
-        cout<<"Offset received is "<<offset<<"\n";
+        int datatoberead;
+        memset(buffer,'\0',BUFFSIZE);
+        recv(cid,buffer,BUFFSIZE,0);
+        stringstream ss1(buffer);
+        ss1>>datatoberead;
+
+        cout<<"datatoberead received is "<<datatoberead<<"\n";
 
         rewind(fp);
-        fseek(fp,offset*BUFFSIZE,SEEK_SET);
+        fseek(fp,offset*CHUNKSIZE,SEEK_SET);
 
         //Now you have to recieve the offset
 
@@ -509,23 +529,24 @@ void transferfiles(int cid)
 
         //send(cid,buffer,n,0);
             
-        int packetsize=CHUNKSIZE;
+        int packetsize=0;
         char packet[PACKETSIZE];
 
         memset(packet,'\0',PACKETSIZE);
         cout<<"Packet size is "<<packetsize<<"\n";
 
-        while( packetsize>0&&(n=fread(packet,sizeof(char),PACKETSIZE,fp))>0)
+        while( packetsize<datatoberead&&(n=fread(packet,sizeof(char),PACKETSIZE,fp))>0)
         {
             send(cid,packet,n,0);
-            cout<<"Value read from file is "<<packet<<endl;
-            packetsize=packetsize-n;
+            //cout<<"Value read from file is "<<packet<<endl;
+            packetsize=packetsize+n;
+            cout<<"Value for offset "<<offset<<" and reamining packetsize "<<packetsize<<"and n is "<<n<<"\n";
+            
             memset(packet,'\0',PACKETSIZE);
         }
         cout<<"Value sent\n";
         fclose(fp);
     }
-    pthread_mutex_unlock(&lock1);
 }
 
 void *funcd(void * arg)
@@ -557,8 +578,13 @@ void *funcd(void * arg)
         cid=accept(sockid,(struct sockaddr*)&addr,(socklen_t*)&len);
 
         //First recevive file name
-        transferfiles(cid);
+        // transferfiles(cid);
         
+        //Using thread to transfer data
+
+        pthread_create(&ids[count],NULL,transferfiles,(void*)&cid);
+        pthread_detach(ids[count++]); 
+
     }
 }
 

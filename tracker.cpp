@@ -11,10 +11,6 @@
 #include<signal.h>
 #include<unordered_map>
 
-// #define BUFFSIZE 512
-// #define CHUNKSIZE 524288
-
-
 #define BUFFSIZE 512
 #define PACKETSIZE 512
 #define CHUNKSIZE 65536
@@ -88,19 +84,12 @@ void *func(void * arg)
         {
             if(x.filename.compare(filename)==0 && x.group_id.compare(group_id)==0)
             {
-                // //string temp=x.ip+" "+x.port;
-                // memset(buffer,'\0',BUFFSIZE);
-
-                // strcpy(buffer,temp.c_str());
-                // //send(cval,(const void*)buffer,sizeof(buffer),0);
-
                 temp.ip=x.ip;
                 temp.port=x.port;
                 temp.filesize=x.filesize;
 
                 result.push_back(temp);
-                flag=true;
-                
+                flag=true;               
             }
             
         }
@@ -170,8 +159,6 @@ void *func(void * arg)
         ss1>>lastchunk;
         ss1>>chunkcount;
         cout<<"No of chunks present is "<<chunkcount<<"and lasr is "<<lastchunk<<"\n";
-
-
 
         strcpy(data,filedata.c_str());
 
