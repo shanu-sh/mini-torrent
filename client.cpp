@@ -274,6 +274,44 @@ void *requestforfilesinchunks(void * arg)
    
 }
 
+void getfilenames(string tracker_ip,int tracker_port)
+{
+
+    int sockid=socket(AF_INET,SOCK_STREAM,0);
+    int control=4;
+
+    int noofiles;
+    char buffer[BUFFSIZE];
+
+    if(sockid<0)
+    {
+        perror("Error in socket creation\n");
+        exit(1);
+    }
+
+    struct sockaddr_in serveraddr;
+    serveraddr.sin_family=AF_INET;
+    serveraddr.sin_port=htons(tracker_port);
+    serveraddr.sin_addr.s_addr=inet_addr(tracker_ip.c_str());
+
+    connect(sockid,(struct sockaddr*)&serveraddr,sizeof(serveraddr));
+
+    send(sockid,(const void*)&control,sizeof(control),0);
+
+    recv(sockid,(void*)&noofiles,sizeof(noofiles),0);
+
+    cout<<"The files present in tracker is \n";
+
+    for(int i=0;i<noofiles;i++)
+    {
+        recv(sockid,(void*)buffer,sizeof(buffer),0);
+        cout<<buffer<<"\n";
+        
+    }
+
+
+}
+
 void recvfromtracker(string ip,int port)
 {
     int control=0;
@@ -436,9 +474,7 @@ void recvfromtracker(string ip,int port)
         temp->filename=filename;
         temp->port=hosts[client].port;
         temp->ip=hosts[client].ip;
-        temp->client=client;
-
-        
+        temp->client=client;        
         
         if(filesize>CHUNKSIZE)
             temp->chunkstoberead=CHUNKSIZE;
@@ -448,7 +484,6 @@ void recvfromtracker(string ip,int port)
         filesize=filesize-CHUNKSIZE;
 
         cout<<"\n"<<" offset is "<<temp->offset<<" port is "<<temp->port<<" and chunks to be read is"<<temp->chunkstoberead<<"\n";
-
         
         pthread_create(&ids[count],NULL,requestforfilesinchunks,(void*)temp);
         pthread_detach(ids[count++]); 
@@ -525,13 +560,6 @@ void *transferfiles(void *arg)
         rewind(fp);
         fseek(fp,offset*CHUNKSIZE,SEEK_SET);
 
-        //Now you have to recieve the offset
-
-        // n=fread(buffer,sizeof(char),BUFFSIZE,fp);
-        // cout<<"Value read from file is "<<buffer<<endl;
-
-        //send(cid,buffer,n,0);
-            
         int packetsize=0;
         char packet[PACKETSIZE];
 
@@ -579,12 +607,6 @@ void *funcd(void * arg)
     while(1)
     {
         cid=accept(sockid,(struct sockaddr*)&addr,(socklen_t*)&len);
-
-        //First recevive file name
-        // transferfiles(cid);
-        
-        //Using thread to transfer data
-
         pthread_create(&ids[count],NULL,transferfiles,(void*)&cid);
         pthread_detach(ids[count++]); 
 
@@ -781,6 +803,17 @@ int main(int argc,char **argv)
             }
             else
                 cout<<"Please check your user_id and password\n";
+        }
+
+        if(cmd.compare("list_files")==0)
+        {
+            if(login_status==false)
+                cout<<"Please login first\n";
+            else
+            {
+                getfilenames(tracker_ip,tracker_port);
+            }
+            
         }
 
         if(cmd.compare("logout")==0)

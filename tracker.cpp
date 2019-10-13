@@ -10,6 +10,7 @@
 #include<sstream>
 #include<signal.h>
 #include<unordered_map>
+#include<set>
 
 #define BUFFSIZE 512
 #define PACKETSIZE 512
@@ -227,6 +228,31 @@ void *func(void * arg)
             else
                 strcpy(buffer,"User_not_present");
             
+            send(cval,(void*)buffer,sizeof(buffer),0);
+        }
+    }
+
+    else if(command==4)
+    {
+        //list file names
+        set<string> result;
+
+        int noofiles=0;
+        char buffer[BUFFSIZE];
+
+        for(auto x:arr)
+        {
+            result.insert(x.filename);
+        }
+
+        noofiles=result.size();
+
+        cout<<"No of files "<<noofiles<<"\n";
+        send(cval,(void*)&noofiles,sizeof(noofiles),0);
+
+        for(auto x:result)
+        {
+            strcpy(buffer,x.c_str());
             send(cval,(void*)buffer,sizeof(buffer),0);
         }
     }
