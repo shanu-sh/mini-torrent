@@ -12,7 +12,7 @@
 
 #define BUFFSIZE 512
 #define PACKETSIZE 512
-#definne CHUNKSIZE 65536
+#define CHUNKSIZE 65536
 
 using namespace std;
 
@@ -42,6 +42,8 @@ struct filetransfer_data
 
 vector<client_data> arr;
 pthread_mutex_t lock;
+
+pthread_mutex_t lock1;
 
 FILE *tr;
 
@@ -125,13 +127,15 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     int chunkcount=0;
     //Reading file and calculating hash and sending to tracker
 
-    while( size>0&&(n=fread(buffer,sizeof(char),BUFFSIZE,fp))>0)
+    char chunk[CHUNKSIZE];
+
+    while( size>0&&(n=fread(chunk,sizeof(char),CHUNKSIZE,fp))>0)
     {
         //send(cid,buffer,n,0);
 
         //Compute hash value
         
-        hash=computehash(buffer);
+        hash=computehash(chunk);
 
         cout<<"\nHash computed is ";
         cout<<hash<<"\n";
@@ -146,7 +150,7 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
 
         chunkcount++;
         size=size-n;
-
+        memset(chunk,'\0',CHUNKSIZE);
     }
 
     arr.push_back(cdata);
@@ -248,7 +252,7 @@ void *requestforfilesinchunks(void * arg)
     rewind(fp);
     fseek(fp,i*BUFFSIZE,SEEK_SET);
 
-    while(packetsize<BUFFSIZE && (n=recv(sockid,packet,PACKETSIZE,0))>0)
+    while(packetsize<CHUNKSIZE && (n=recv(sockid,packet,PACKETSIZE,0))>0)
     {
         
         cout<<"Value read in packet is "<<buffer<<" and csize is "<<packetsize<<"\n";
@@ -437,6 +441,8 @@ void recvfromtracker(string ip,int port)
 
 void transferfiles(int cid)
 {
+
+    pthread_mutex_lock(&lock1);
     int command,n;
     
     char buffer[BUFFSIZE];
@@ -503,7 +509,7 @@ void transferfiles(int cid)
 
         //send(cid,buffer,n,0);
             
-        int packetsize=BUFFSIZE;
+        int packetsize=CHUNKSIZE;
         char packet[PACKETSIZE];
 
         memset(packet,'\0',PACKETSIZE);
@@ -519,6 +525,7 @@ void transferfiles(int cid)
         cout<<"Value sent\n";
         fclose(fp);
     }
+    pthread_mutex_unlock(&lock1);
 }
 
 void *funcd(void * arg)

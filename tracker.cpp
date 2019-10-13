@@ -11,8 +11,13 @@
 #include<signal.h>
 #include<unordered_map>
 
+// #define BUFFSIZE 512
+// #define CHUNKSIZE 524288
+
+
 #define BUFFSIZE 512
-#define CHUNKSIZE 524288
+#define PACKETSIZE 512
+#define CHUNKSIZE 65536
 
 using namespace std;
 
@@ -23,14 +28,14 @@ struct trackerdata
     string group_id;
     string hash;
     string filename;
-    string nofchunk;
-    string lastchunksize; 
+    string filesize; 
 };
 
 struct host_data
 {
     string ip;
     string port;
+    string filesize;
 };
 
 vector<struct trackerdata> arr;
@@ -41,7 +46,6 @@ FILE *utr;
 
 void mysignal_handler(int s)
 {
-    //cout<<"Signal caught";
     fclose(tr);
     fclose(utr);
     exit(1);
@@ -92,6 +96,8 @@ void *func(void * arg)
 
                 temp.ip=x.ip;
                 temp.port=x.port;
+                temp.filesize=x.filesize;
+
                 result.push_back(temp);
                 flag=true;
                 
@@ -102,12 +108,12 @@ void *func(void * arg)
         {
             for(auto x:result)
             {
-                cout<<"ip is "<<x.ip<<" and port is "<<x.port<<"\n";
-                string temp=x.ip+" "+x.port;
+                cout<<"ip is "<<x.ip<<" and port is "<<x.port<<"and file size is "<<x.filesize<<"\n";
+                string temp=x.ip+" "+x.port+" "+x.filesize+"\n";
                 memset(buffer,'\0',BUFFSIZE);
 
                 strcpy(buffer,temp.c_str());
-                send(cval,(const void*)buffer,sizeof(buffer),0);
+                send(cval,(const void*)buffer,BUFFSIZE,0);
 
             }
         }
@@ -134,6 +140,7 @@ void *func(void * arg)
         ss>>temp.ip;
         ss>>temp.port;
         ss>>temp.group_id;
+        ss>>temp.filesize;
 
         memset(buffer,'\0',BUFFSIZE);
         string hash="";
@@ -150,7 +157,7 @@ void *func(void * arg)
         arr.push_back(temp);
 
         char data[100000];
-        string filedata=temp.filename+" "+temp.ip+" "+temp.port+" "+temp.group_id+"\n";
+        string filedata=temp.filename+" "+temp.ip+" "+temp.port+" "+temp.group_id+" "+temp.filesize+"\n";
         //Add it later  //+temp.hash+"\n";
 
         memset(buffer,'\0',BUFFSIZE);
@@ -292,6 +299,7 @@ int main()
             ss>>temp.ip;
             ss>>temp.port;
             ss>>temp.group_id;
+            ss>>temp.filesize;
             //ss>>temp.hash;"
 
             cout<<temp.ip<<" "<<temp.port<<"\n";
