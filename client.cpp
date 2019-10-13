@@ -10,8 +10,9 @@
 #include<vector>
 #include<openssl/sha.h>
 
-#define BUFFSIZE 65536
+#define BUFFSIZE 512
 #define PACKETSIZE 512
+#definne CHUNKSIZE 65536
 
 using namespace std;
 
