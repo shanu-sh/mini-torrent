@@ -32,7 +32,7 @@ struct host_data
 
 struct filetransfer_data
 {
-    int offset;
+    long offset;
     int noofclients;
     string filename;
     string ip;
@@ -160,18 +160,18 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     string fdata;
 
     fdata=cdata.filename+" ";
-    for(int i=0;i<cdata.chunks.size();i++)
+    for(long i=0;i<cdata.chunks.size();i++)
     {
         if(i!=cdata.chunks.size()-1)
-            fdata=fdata+cdata.chunks[i]+" ";
+            fdata=cdata.chunks[i]+" ";
         else
-            fdata=fdata+cdata.chunks[i]+"\n";
+            fdata=cdata.chunks[i]+"\n";
+
+        strcpy(buffer,fdata.c_str());
+
+        fwrite(buffer,sizeof(char),strlen(buffer),tr);
+        fflush(tr);
     }
-
-    strcpy(buffer,fdata.c_str());
-
-    fwrite(buffer,sizeof(char),strlen(buffer),tr);
-    fflush(tr);
 
     cout<<"No of chunks created "<<chunkcount<<"\n";
     cout<<"Last chunk size is "<<n<<"\n";
@@ -200,7 +200,7 @@ void *requestforfilesinchunks(void * arg)
 
     cout<<"is offest "<<temp.offset<<"\n";
 
-    int i=temp.offset;
+    long i=temp.offset;
     int control,n;
     char buffer[BUFFSIZE];
     int noofclients=temp.noofclients;
@@ -406,27 +406,30 @@ void recvfromtracker(string ip,int port)
     int totlch=chunkdata[0]-1;
     int noofclients=hosts.size();
 
-    int part=totlch/noofclients;
-    
+    cout<<"No of clients is "<<noofclients<<"\n";
     FILE * fpt;
-    //creating file with temp values
-    char buffer1[filesize]={'\0'};
+    
     fpt=fopen(filename.c_str(),"w");
-    fwrite(buffer1,sizeof(char),filesize,fpt);
+    cout<<"File opened\n";
+
+    for(long i=0;i<filesize;i++)
+        fputc('\0',fpt);
+    
     fflush(fpt);
     fclose(fpt);
    
-    cout<<"Total chunks is "<<totlch<<" no of cients "<<noofclients<<" part "<<part<<" \n";
-    pthread_t ids[BUFFSIZE];
+    cout<<"File creating and writing done\n";
+    cout<<"Total chunks is "<<totlch<<" no of cients "<<noofclients<<" \n";
+    pthread_t ids[CHUNKSIZE];
 
-    int count=0;
+    long count=0;
     
     vector<filetransfer_data> farr;
-    for(int i=0;i<=totlch;i++)
+    for(long i=0;i<=totlch;i++)
     {
         struct filetransfer_data *temp=new struct filetransfer_data;
 
-        int client=i%noofclients;
+        long client=i%noofclients;
 
         temp->offset=i;
         temp->noofclients=noofclients;
@@ -491,7 +494,7 @@ void *transferfiles(void *arg)
 
     else if(command==1)
     {
-        int offset;
+        long offset;
         string temp;
 
         //For the filename start sending the file
