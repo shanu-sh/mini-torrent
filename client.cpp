@@ -161,7 +161,7 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
 
     for(long i=0;i<cdata.chunks.size();i++)
     {
-        cout<<"i is "<<i<<"\n";
+        //cout<<"i is "<<i<<"\n";
 
         if(i!=cdata.chunks.size()-1)
             fdata=to_string(cdata.chunks[i])+" ";
@@ -181,7 +181,6 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     string t=to_string(n)+" "+to_string(chunkcount);
     strcpy(buffer,t.c_str());
 
-    cout<<buffer<<"\n";
     send(sockid,buffer,BUFFSIZE,0);
     
     fclose(fp);
@@ -196,9 +195,7 @@ void *requestforfilesinchunks(void * arg)
     struct filetransfer_data *ptr=(struct filetransfer_data *)arg;
 
     struct filetransfer_data temp=*ptr;
-
-    cout<<"is offest "<<temp.offset<<"\n";
-
+    
     long i=temp.offset;
     int control,n;
     char buffer[BUFFSIZE];
@@ -209,7 +206,6 @@ void *requestforfilesinchunks(void * arg)
     string ip=temp.ip;
 
     int sockid=socket(AF_INET,SOCK_STREAM,0);
-    cout<<"Socket created\n";
 
     if(sockid<0)
     {
@@ -229,13 +225,11 @@ void *requestforfilesinchunks(void * arg)
     memset(buffer,'\0',BUFFSIZE);
     strcpy(buffer,filename.c_str());
 
-    cout<<"Sending file name "<<buffer<<"\n";
     send(sockid, buffer, sizeof(buffer), 0);
 
     //Now send the file offset which you want to read
    
     strcpy(buffer,to_string(i).c_str());
-    cout<<"Offset send is "<<buffer<<"\n";
 
     send(sockid, buffer,BUFFSIZE, 0);
 
@@ -243,8 +237,6 @@ void *requestforfilesinchunks(void * arg)
 
     strcpy(buffer,to_string(datatoberead).c_str());
     send(sockid, buffer,BUFFSIZE, 0);
-
-    cout<<"Waiting for server to send data\n";
 
     //n=recv(sockid,buffer,BUFFSIZE,0);
     int packetsize=0;
@@ -304,7 +296,6 @@ void getfilenames(string tracker_ip,int tracker_port)
     for(int i=0;i<noofiles;i++)
     {
         recv(sockid,(void*)buffer,sizeof(buffer),0);
-        cout<<buffer<<"\n";
     }
 }
 
@@ -358,7 +349,6 @@ void recvfromtracker(string ip,int port)
     memset(buffer,'\0',BUFFSIZE);
     while((n=recv(sockid,buffer,BUFFSIZE,0))>0)
     {
-        cout<<buffer<<"\n";
         stringstream ss(buffer);
 
         struct host_data hdata;
@@ -399,15 +389,12 @@ void recvfromtracker(string ip,int port)
         vector<int> bitsinfo;
 
         sockid=socket(AF_INET,SOCK_STREAM,0);
-        cout<<"Socket created\n";
-
         if(sockid<0)
         {
             perror("Error in socket creation\n");
             exit(1);
         }
 
-        cout<<"ip is "<<hosts[i].ip<<" "<<hosts[i].port<<" \n";
         serveraddr.sin_family=AF_INET;
         serveraddr.sin_port=htons(hosts[i].port);
         serveraddr.sin_addr.s_addr=inet_addr(hosts[i].ip.c_str());
@@ -422,14 +409,12 @@ void recvfromtracker(string ip,int port)
         send(sockid, buffer, sizeof(buffer), 0);
         recv(sockid,buffer,BUFFSIZE,0);
 
-        cout<<buffer<<"\n";
         int chunkcount;
         string temp;
 
         stringstream ss(buffer);
         ss>>temp;
         chunkcount=stoi(temp);
-        cout<<"Chunk present is "<<chunkcount<<"\n";
         chunkdata.push_back(chunkcount);
 
         int bit;
@@ -449,24 +434,22 @@ void recvfromtracker(string ip,int port)
         close(sockid);
     }
 
-    for(int i=0;i<hosts.size();i++)
-    {
-        cout<<hosts[i].port<<" is host "<<chunkdata[i]<<" \n";
+    // for(int i=0;i<hosts.size();i++)
+    // {
+    //     cout<<hosts[i].port<<" is host "<<chunkdata[i]<<" \n";
 
-        for(auto x:chunksinfo[i])
-            cout<<x;
-        cout<<"\n";
-    }
+    //     for(auto x:chunksinfo[i])
+    //         cout<<x;
+    //     cout<<"\n";
+    // }
 
     filesize=hosts[0].filesize;
 
     //First Write logic of how to get which part from which client
-    cout<<"File size is "<<filesize<<"\n";
 
     int totlch=chunkdata[0]-1;
     int noofclients=hosts.size();
 
-    cout<<"No of clients is "<<noofclients<<"\n";
     FILE * fpt;
     
     fpt=fopen(filename.c_str(),"w");
@@ -478,10 +461,7 @@ void recvfromtracker(string ip,int port)
     fflush(fpt);
     fclose(fpt);
    
-    cout<<"File creating and writing done\n";
-    cout<<"Total chunks is "<<totlch<<" no of cients "<<noofclients<<" \n";
     pthread_t ids[CHUNKSIZE];
-
     long count=0;
     
     vector<filetransfer_data> farr;
@@ -532,9 +512,6 @@ void recvfromtracker(string ip,int port)
             temp->chunkstoberead=filesize;
 
         filesize=filesize-CHUNKSIZE;
-
-        cout<<"\n"<<" offset is "<<temp->offset<<" port is "<<temp->port<<" and chunks to be read is"<<temp->chunkstoberead<<"\n";
-        
         pthread_create(&ids[count],NULL,requestforfilesinchunks,(void*)temp);
         pthread_detach(ids[count++]); 
     }
@@ -554,21 +531,17 @@ void *transferfiles(void *arg)
     if(command==0)
     {
         //Send the chunk count to the requesting client
-        cout<<"Sending chunk size\n";
-
         //received the filename
+
         recv(cid,buffer,sizeof(buffer),0);
 
         cout<<"file name is "<<buffer<<"\n";
         string filename(buffer);
-        cout<<buffer<<"\n";
-
         for(auto x:arr)
         {
             if(x.filename.compare(filename)==0)
             {
                 string sdata=to_string(x.chunks.size());
-                cout<<sdata<<"\n";
                 strcpy(buffer,sdata.c_str());
                 send(cid,buffer,sizeof(buffer),0);
 
@@ -594,7 +567,6 @@ void *transferfiles(void *arg)
         memset(buffer,'\0',BUFFSIZE);
 
         recv(cid,buffer,BUFFSIZE,0);
-        //cout<<buffer<<"\n";
 
         FILE *fp;
         fp=fopen(buffer,"r");
@@ -611,8 +583,6 @@ void *transferfiles(void *arg)
         stringstream ss1(buffer);
         ss1>>datatoberead;
 
-        cout<<"datatoberead received is "<<datatoberead<<"\n";
-
         rewind(fp);
         fseek(fp,offset*CHUNKSIZE,SEEK_SET);
 
@@ -620,15 +590,10 @@ void *transferfiles(void *arg)
         char packet[PACKETSIZE];
 
         memset(packet,'\0',PACKETSIZE);
-        cout<<"Packet size is "<<packetsize<<"\n";
-
         while( packetsize<datatoberead&&(n=fread(packet,sizeof(char),PACKETSIZE,fp))>0)
         {
             send(cid,packet,n,0);
-            //cout<<"Value read from file is "<<packet<<endl;
             packetsize=packetsize+n;
-            //cout<<"Value for offset "<<offset<<" and reamining packetsize "<<packetsize<<"and n is "<<n<<"\n";
-            
             memset(packet,'\0',PACKETSIZE);
         }
         cout<<"Value sent\n";
@@ -776,7 +741,7 @@ int main(int argc,char **argv)
     {
         while(fscanf(tr,"%[^\n]\n",buffer)!=EOF)
         {
-            cout<<buffer<<"\n";
+            //cout<<buffer<<"\n";
             stringstream ss(buffer);
 
             struct client_data temp;

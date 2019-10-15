@@ -56,8 +56,6 @@ void *func(void * arg)
 
     recv(cval,( void*)&command,sizeof(command),0);
 
-    cout<<command<<"\n";
-
     if(command==0)
     {
         int nsockid;
@@ -121,7 +119,6 @@ void *func(void * arg)
         string filename;
         char buffer[BUFFSIZE];
         recv(cval,(void*)buffer,sizeof(buffer),0);
-        cout<<buffer<<"\n";
 
         stringstream ss(buffer);
 
@@ -141,8 +138,7 @@ void *func(void * arg)
         //     // cout<<n<<"\n";
         //     memset(buffer,'\0',BUFFSIZE);
         // }
-
-        cout<<"Recieved hash is "<<hash<<"\n";
+        // cout<<"Recieved hash is "<<hash<<"\n";
         temp.hash=hash;
         arr.push_back(temp);
 
@@ -159,8 +155,6 @@ void *func(void * arg)
 
         ss1>>lastchunk;
         ss1>>chunkcount;
-        cout<<"No of chunks present is "<<chunkcount<<"and lasr is "<<lastchunk<<"\n";
-
         strcpy(data,filedata.c_str());
 
         fwrite(data,sizeof(char),strlen(data),tr);
@@ -247,7 +241,6 @@ void *func(void * arg)
 
         noofiles=result.size();
 
-        cout<<"No of files "<<noofiles<<"\n";
         send(cval,(void*)&noofiles,sizeof(noofiles),0);
 
         for(auto x:result)
@@ -277,7 +270,7 @@ void *acceptclient(void *arg)
     pthread_t ids[CHUNKSIZE];
     int count=0;
 
-    cout<<"Before listen\n";
+    cout<<"Tracker started\n";
     listen(sockid,3);
 
     int command;
@@ -300,8 +293,6 @@ int main()
     if(tr!=NULL)
     {
         char buffer1[200000];
-        cout<<"reading from file\n";
-    
         while(fscanf(tr,"%[^\n]\n",buffer1)!=EOF)
         {
             cout<<buffer1<<"\n";
@@ -328,7 +319,6 @@ int main()
         
         while(fscanf(utr,"%[^\n]\n",buffer1)!=EOF)
         {
-            cout<<buffer1<<"\n";
             stringstream ss(buffer1);
 
             string user_id;
