@@ -274,7 +274,7 @@ void *acceptclient(void *arg)
 
     bind(sockid,(struct sockaddr*)&addr,sizeof(addr));
 
-    pthread_t ids[BUFFSIZE];
+    pthread_t ids[CHUNKSIZE];
     int count=0;
 
     cout<<"Before listen\n";

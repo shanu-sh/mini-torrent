@@ -657,7 +657,7 @@ void *funcd(void * arg)
 
     listen(sockid,3);
 
-    pthread_t ids[BUFFSIZE];
+    pthread_t ids[CHUNKSIZE];
     int count=0;
 
     while(1)
