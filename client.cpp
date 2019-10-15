@@ -12,7 +12,7 @@
 
 #define BUFFSIZE 512
 #define PACKETSIZE 512
-#define CHUNKSIZE 65536
+#define CHUNKSIZE 524288
 
 using namespace std;
 
