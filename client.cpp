@@ -19,7 +19,7 @@ using namespace std;
 struct client_data
 {
     string filename;
-    vector<string> chunks;
+    vector<int> chunks;
 };
 
 struct host_data
@@ -27,7 +27,6 @@ struct host_data
     string ip;
     int port;
     long filesize;
-
 };
 
 struct filetransfer_data
@@ -45,11 +44,9 @@ struct filetransfer_data
 vector<client_data> arr;
 pthread_mutex_t lock;
 
-pthread_mutex_t lock1;
-
 FILE *tr;
 
-bool login_status=true;
+bool login_status=false;
 
 string computehash(string str)
 {
@@ -67,7 +64,6 @@ string computehash(string str)
         sprintf((char*)&(buf[i]), "%x", temp[i]);
         hash=hash+buf[i];
     }
-
     return hash;
 }
 
@@ -122,7 +118,6 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     send(sockid,(const void*)&control,sizeof(control),0);
     send(sockid,(const void*)data,sizeof(data),0);
 
-
     //Now we need to create hash and send to the tracker
 
     string hash;
@@ -148,7 +143,7 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
 
         memset(buffer,'\0',BUFFSIZE);
 
-        cdata.chunks.push_back(to_string(chunkcount));
+        cdata.chunks.push_back(1);
 
         chunkcount++;
         size=size-n;
@@ -160,12 +155,18 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     string fdata;
 
     fdata=cdata.filename+" ";
+    strcpy(buffer,fdata.c_str());
+    fwrite(buffer,sizeof(char),strlen(buffer),tr);
+    fflush(tr);
+
     for(long i=0;i<cdata.chunks.size();i++)
     {
+        cout<<"i is "<<i<<"\n";
+
         if(i!=cdata.chunks.size()-1)
-            fdata=cdata.chunks[i]+" ";
+            fdata=to_string(cdata.chunks[i])+" ";
         else
-            fdata=cdata.chunks[i]+"\n";
+            fdata=to_string(cdata.chunks[i])+"\n";
 
         strcpy(buffer,fdata.c_str());
 
@@ -183,9 +184,7 @@ void send2tracker(string tracker_ip,int tracker_port,string ip,int port,string f
     cout<<buffer<<"\n";
     send(sockid,buffer,BUFFSIZE,0);
     
-
     fclose(fp);
-
     close(sockid);
 }
 
@@ -258,7 +257,7 @@ void *requestforfilesinchunks(void * arg)
     while(packetsize<datatoberead && (n=recv(sockid,packet,PACKETSIZE,0))>0)
     {
         
-        cout<<"Value read in packet is "<<buffer<<" and csize is "<<packetsize<<"\n";
+        //cout<<"Value read in packet is "<<buffer<<" and csize is "<<packetsize<<"\n";
         packetsize=packetsize+n;
         
         fwrite(packet,sizeof(char),n,fpt);
@@ -306,10 +305,7 @@ void getfilenames(string tracker_ip,int tracker_port)
     {
         recv(sockid,(void*)buffer,sizeof(buffer),0);
         cout<<buffer<<"\n";
-        
     }
-
-
 }
 
 void recvfromtracker(string ip,int port)
@@ -394,10 +390,17 @@ void recvfromtracker(string ip,int port)
     //Now connect to client server to get the total count of chunk present
 
     vector<int> chunkdata;
+
+    vector<vector<int> > chunksinfo;
+
+
     for(int i=0;i<hosts.size();i++)
     {
+        vector<int> bitsinfo;
+
         sockid=socket(AF_INET,SOCK_STREAM,0);
         cout<<"Socket created\n";
+
         if(sockid<0)
         {
             perror("Error in socket creation\n");
@@ -414,6 +417,7 @@ void recvfromtracker(string ip,int port)
         //Sends the control information to client server to get the no of chunks
         control=0;
         send(sockid,(const void*)&control,sizeof(control),0);
+
         strcpy(buffer,filename.c_str());
         send(sockid, buffer, sizeof(buffer), 0);
         recv(sockid,buffer,BUFFSIZE,0);
@@ -427,13 +431,31 @@ void recvfromtracker(string ip,int port)
         chunkcount=stoi(temp);
         cout<<"Chunk present is "<<chunkcount<<"\n";
         chunkdata.push_back(chunkcount);
+
+        int bit;
+        for(long i=0;i<chunkcount;i++)
+        {
+            recv(sockid,buffer,BUFFSIZE,0);
+            stringstream ss1(buffer);
+            ss1>>bit;
+
+            if(bit)
+                bitsinfo.push_back(1);
+            else
+                bitsinfo.push_back(0);
+        }
+
+        chunksinfo.push_back(bitsinfo);
         close(sockid);
     }
 
     for(int i=0;i<hosts.size();i++)
     {
         cout<<hosts[i].port<<" is host "<<chunkdata[i]<<" \n";
-        
+
+        for(auto x:chunksinfo[i])
+            cout<<x;
+        cout<<"\n";
     }
 
     filesize=hosts[0].filesize;
@@ -463,12 +485,40 @@ void recvfromtracker(string ip,int port)
     long count=0;
     
     vector<filetransfer_data> farr;
+
+    vector<int> datafetched(totlch+1,0);
+
     for(long i=0;i<=totlch;i++)
     {
         struct filetransfer_data *temp=new struct filetransfer_data;
 
         long client=i%noofclients;
 
+        bool flag=true;
+        if(chunksinfo[client][i]!=1)
+        {
+            flag=false;
+
+            cout<<"Chunk "<<i<<" Not present in destined client\n";
+            for(long j=0;j<noofclients;j++)
+            {
+                if(chunksinfo[j][i]==1)
+                {
+                    cout<<"chunk "<<i<<" not present in "<<client<<" But present in "<<j<<"\n";
+                    client=j;
+                    flag=true;
+                    break;
+                }
+            }
+        }
+        if(flag==false)
+        {
+            cout<<"Chunk "<<i<<" not present in any client\n";
+            continue;
+        }
+
+        datafetched[i]=1;
+        
         temp->offset=i;
         temp->noofclients=noofclients;
         temp->filename=filename;
@@ -521,6 +571,12 @@ void *transferfiles(void *arg)
                 cout<<sdata<<"\n";
                 strcpy(buffer,sdata.c_str());
                 send(cid,buffer,sizeof(buffer),0);
+
+                for(auto y:x.chunks)
+                {
+                    strcpy(buffer,to_string(y).c_str());
+                    send(cid,buffer,sizeof(buffer),0);
+                }
                 break;
             }
         }
@@ -571,7 +627,7 @@ void *transferfiles(void *arg)
             send(cid,packet,n,0);
             //cout<<"Value read from file is "<<packet<<endl;
             packetsize=packetsize+n;
-            cout<<"Value for offset "<<offset<<" and reamining packetsize "<<packetsize<<"and n is "<<n<<"\n";
+            //cout<<"Value for offset "<<offset<<" and reamining packetsize "<<packetsize<<"and n is "<<n<<"\n";
             
             memset(packet,'\0',PACKETSIZE);
         }
@@ -710,7 +766,7 @@ int main(int argc,char **argv)
     int port=stoi(argv[2]);
     string cmd;
 
-    char buffer[BUFFSIZE];
+    char buffer[CHUNKSIZE];
 
     string user_id,password;
     struct host_data data;
@@ -724,7 +780,7 @@ int main(int argc,char **argv)
             stringstream ss(buffer);
 
             struct client_data temp;
-            string t;
+            int t;
 
             ss>>temp.filename;
             while(ss>>t)
@@ -825,7 +881,7 @@ int main(int argc,char **argv)
                 login_status=false;
                 cout<<"Logged out\n";
             }
-            
         }
+
     }   
 }
